@@ -1,7 +1,8 @@
 import os
 import tempfile
 import unittest
-from veridoc.lint import parse_lint_output, tag_file
+from unittest.mock import patch, Mock
+from veridoc.lint import parse_lint_output, tag_file, _run_lint
 
 
 SAMPLE_OUTPUT = """\
@@ -114,6 +115,64 @@ class TestTagFile(unittest.TestCase):
         # Headers come next
         self.assertTrue(lines[2].startswith("// lint-test:"))
         self.assertTrue(lines[3].startswith("// tb-test:"))
+        os.unlink(path)
+
+
+class TestRunLintIncludeDirs(unittest.TestCase):
+    def _run(self, include_dirs):
+        mock_result = Mock(stdout="", stderr="")
+        with patch("veridoc.lint.subprocess.run", return_value=mock_result):
+            return _run_lint("foo.v", include_dirs)
+
+    def test_include_dir_is_separate_arg(self):
+        _, cmd = self._run(["rtl/core/"])
+        # Must appear as two separate elements, not concatenated
+        self.assertIn("-I", cmd)
+        self.assertNotIn("-Irtl/core/", cmd)
+        idx = cmd.index("-I")
+        self.assertEqual(cmd[idx + 1], "rtl/core/")
+
+    def test_include_dir_joined_string_has_space(self):
+        # The joined cmd string is what ends up in the lint-test header comment
+        _, cmd = self._run(["rtl/core/"])
+        cmd_str = " ".join(cmd)
+        self.assertIn("-I rtl/core/", cmd_str)
+        self.assertNotIn("-Irtl/core/", cmd_str)
+
+    def test_multiple_include_dirs(self):
+        _, cmd = self._run(["rtl/core/", "rtl/lib/"])
+        cmd_str = " ".join(cmd)
+        self.assertIn("-I rtl/core/", cmd_str)
+        self.assertIn("-I rtl/lib/", cmd_str)
+
+
+class TestTagFileDuplicateHeaders(unittest.TestCase):
+    def _write(self, content):
+        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".v", delete=False)
+        tmp.write(content)
+        tmp.close()
+        return tmp.name
+
+    def test_no_duplicate_when_headers_outside_leading_block(self):
+        # Headers appear after module declaration (not in the leading comment block).
+        # Old code only checked header_block (leading comments) and would add duplicates here.
+        src = "module foo ();\n// lint-test: verilator --lint-only foo.v\n// tb-test: tba\nendmodule\n"
+        path = self._write(src)
+        tag_file(path, {1: "some warning"}, ["verilator", "--lint-only", path])
+        with open(path) as f:
+            content = f.read()
+        self.assertEqual(content.count("// lint-test:"), 1)
+        self.assertEqual(content.count("// tb-test:"), 1)
+        os.unlink(path)
+
+    def test_no_duplicate_tb_test_when_only_tb_present(self):
+        # Only tb-test already exists; lint-test should be added but tb-test must not duplicate.
+        src = "// tb-test: some_script\nmodule foo ();\nendmodule\n"
+        path = self._write(src)
+        tag_file(path, {2: "some warning"}, ["verilator", "--lint-only", path])
+        with open(path) as f:
+            content = f.read()
+        self.assertEqual(content.count("// tb-test:"), 1)
         os.unlink(path)
 
 

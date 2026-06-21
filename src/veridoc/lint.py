@@ -15,7 +15,7 @@ def _check_verilator():
 def _run_lint(filepath, include_dirs):
     cmd = ["verilator", "--lint-only", "-Wall"]
     for d in include_dirs:
-        cmd.append(f"-I{d}")
+        cmd.extend(["-I", d])
     cmd.append(filepath)
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.stdout + result.stderr, cmd
@@ -84,11 +84,11 @@ def tag_file(filepath, issues, lint_cmd):
             break
 
     lint_cmd_str = " ".join(lint_cmd)
-    header_block = "".join(lines[:insert_idx])
+    full_content = "".join(lines)
     new_headers = []
-    if "// lint-test:" not in header_block:
+    if "// lint-test:" not in full_content:
         new_headers.append(f"// lint-test: {lint_cmd_str}\n")
-    if "// tb-test:" not in header_block:
+    if "// tb-test:" not in full_content:
         new_headers.append("// tb-test: tba\n")
 
     if new_headers:
