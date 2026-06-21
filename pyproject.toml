@@ -16,3 +16,4 @@ dependencies = []
 
 [project.scripts]
 veridoc = "veridoc.cli:main"
+verilint = "veridoc.lint:main"

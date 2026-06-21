@@ -59,17 +59,24 @@ def main():
         help="Directories or files to exclude from scanning"
     )
 
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be written without touching any files"
+    )
+
     args = parser.parse_args()
 
     paths = args.dir if args.dir else args.file
 
     v = VerilogWikiParser(
-        paths, 
-        verbose=args.v, 
-        ci=args.ci, 
-        json_graph=args.json_graph, 
+        paths,
+        verbose=args.v,
+        ci=args.ci,
+        json_graph=args.json_graph,
         print_errors=args.print_errors,
-        exclude=args.exclude
+        exclude=args.exclude,
+        dry_run=args.dry_run,
     )
     v.scan()
     v.generate_markdown(args.out)
@@ -77,7 +84,11 @@ def main():
     v.write_log()
     v.run_ci_checks()
 
-    print("Done.")
+    total = len(v.modules)
+    written = len(v.modified_files)
+    unchanged = total - written
+    action = "would be written" if args.dry_run else "written"
+    print(f"\n{total} module(s) processed — {written} doc(s) {action}, {unchanged} unchanged")
 
 if __name__ == "__main__":
     main()

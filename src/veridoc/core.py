@@ -5,7 +5,7 @@ import json
 import sys
 
 class VerilogWikiParser(object):
-    def __init__(self, paths, verbose=0, ci=False, json_graph=False, print_errors=False, exclude=None):
+    def __init__(self, paths, verbose=0, ci=False, json_graph=False, print_errors=False, exclude=None, dry_run=False):
         self.paths = paths
         self.modules = {}
         self.called_by = {}
@@ -16,6 +16,7 @@ class VerilogWikiParser(object):
         self.print_errors = print_errors
         self.exclude = exclude or []
         self.issues = []
+        self.dry_run = dry_run
 
     # -------------------------
     # CLEAN COMMENTS
@@ -44,7 +45,9 @@ class VerilogWikiParser(object):
         for p in re.split(r",\s*\n|,\s*", param_block):
             p = p.strip()
             if p.startswith("parameter"):
-                parameters.append(p.replace("parameter", "").strip())
+                param_str = re.sub(r"\bparameter\b", "", p).strip()
+                param_str = re.sub(r"^(integer|logic|reg|wire|bit|byte|shortint|int|longint|signed|unsigned)\s+", "", param_str)
+                parameters.append(param_str.strip())
 
         ports = re.split(r",\s*\n|,\s*", port_block)
 
@@ -84,7 +87,7 @@ class VerilogWikiParser(object):
         }
 
     def remove_module_header(self, text):
-        return re.sub(r"\bmodule\s+\w+.*?;\s*", "", text, flags=re.S)
+        return re.sub(r"\bmodule\b[^;]*;", "", text)
 
     def extract_calls(self, text, known_modules, current_module):
         calls = set()
@@ -97,6 +100,15 @@ class VerilogWikiParser(object):
                 calls.add(mod_name)
 
         return sorted(list(calls))
+
+    _TB_SUFFIXES = ("_tb.v", "_tb.sv", "_bench.v", "_bench.sv", "_testbench.v", "_testbench.sv")
+    _RTL_EXTENSIONS = (".v", ".sv")
+
+    def _is_rtl_file(self, filename):
+        return (
+            any(filename.endswith(ext) for ext in self._RTL_EXTENSIONS)
+            and not any(filename.endswith(s) for s in self._TB_SUFFIXES)
+        )
 
     # -------------------------
     # SCAN
@@ -121,7 +133,7 @@ class VerilogWikiParser(object):
                     if is_excluded(root):
                         continue
                     for f in files:
-                        if f.endswith(".v") and not f.endswith("_tb.v"):
+                        if self._is_rtl_file(f):
                             full_path = os.path.join(root, f)
                             if not is_excluded(full_path):
                                 all_files.append(full_path)
@@ -198,7 +210,8 @@ class VerilogWikiParser(object):
     # MARKDOWN
     # -------------------------
     def generate_markdown(self, out_dir):
-        os.makedirs(out_dir, exist_ok=True)
+        if not self.dry_run:
+            os.makedirs(out_dir, exist_ok=True)
         
         managed_sections = ["Parameters", "Inputs", "Outputs", "Inouts", "Calls", "Called By"]
 
@@ -254,9 +267,10 @@ class VerilogWikiParser(object):
             content = content.strip() + "\n"
 
             if content != old_content:
-                with open(fname, "w") as f:
-                    f.write(content)
-                
+                if not self.dry_run:
+                    with open(fname, "w") as f:
+                        f.write(content)
+
                 diff_str = f"{mod}: " + ", ".join([f"{k} +{a}/-{r}" for k, (a, r) in diffs.items()])
                 self.modified_files.append((fname, diff_str))
 
@@ -264,33 +278,43 @@ class VerilogWikiParser(object):
     # LOGGING
     # -------------------------
     def write_log(self):
-        if not self.modified_files:
-            return
+        if self.modified_files:
+            if self.dry_run:
+                print("\n[DRY RUN] Would write:")
+                for fname, _ in self.modified_files:
+                    print(f"  {fname}")
+                if self.verbose >= 2:
+                    print("\nDetailed section diffs:")
+                    for _, diff_str in self.modified_files:
+                        print(f"  {diff_str}")
+            else:
+                tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".log")
+                tmp.write("Modified files:\n")
+                for fname, _ in self.modified_files:
+                    tmp.write(fname + "\n")
+                tmp.write("\nDetailed section diffs:\n")
+                for _, diff_str in self.modified_files:
+                    tmp.write(diff_str + "\n")
+                tmp.close()
 
-        log_lines = []
-        if self.verbose >= 1:
-            log_lines.append("Modified files:")
-            for fname, _ in self.modified_files:
-                log_lines.append(fname)
+                if self.verbose >= 1:
+                    print("\nModified files:")
+                    for fname, _ in self.modified_files:
+                        print(fname)
 
-        if self.verbose >= 2:
-            log_lines.append("\nDetailed section diffs:")
-            for _, diff_str in self.modified_files:
-                log_lines.append(diff_str)
+                if self.verbose >= 2:
+                    print("\nDetailed section diffs:")
+                    for _, diff_str in self.modified_files:
+                        print(diff_str)
 
-        if log_lines:
-            tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix=".log")
-            tmp.write("\n".join(log_lines) + "\n")
-            tmp.close()
+                print(f"\nLog file: {tmp.name}")
 
-            print("\n" + "\n".join(log_lines))
-            print(f"\nLog file: {tmp.name}")
-
-        missing_docs = [mod for mod, _ in self.modules.items() if any(f"{mod}: missing description" in i for i in self.issues)]
-        if missing_docs:
-            print("\nMissing Docs Summary Report:")
-            for m in missing_docs:
-                print(f"  - {m}")
+        if not self.ci:
+            missing_docs = [mod for mod in self.modules if any(f"{mod}: missing description" in i for i in self.issues)]
+            if missing_docs:
+                print("\nMissing Docs Summary Report:")
+                for m in missing_docs:
+                    print(f"  - {m}")
 
     # -------------------------
     # JSON GRAPH
@@ -325,15 +349,16 @@ class VerilogWikiParser(object):
                 self.issues.append(f"{mod}: self-instantiation")
 
         if self.issues:
-            tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix="_errors.log")
-            tmp.write("CI FAIL:\n")
-            for i in self.issues:
-                tmp.write(i + "\n")
-            tmp.close()
+            if not self.dry_run:
+                tmp = tempfile.NamedTemporaryFile(delete=False, mode="w", suffix="_errors.log")
+                tmp.write("CI FAIL:\n")
+                for i in self.issues:
+                    tmp.write(i + "\n")
+                tmp.close()
+                print(f"\nError log file: {tmp.name}")
 
-            if self.print_errors:
+            if self.print_errors or self.dry_run:
                 print("\nCI FAIL:")
                 for i in self.issues:
                     print(i)
-            print(f"\nError log file: {tmp.name}")
             sys.exit(1)
