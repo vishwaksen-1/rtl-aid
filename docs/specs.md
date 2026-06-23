@@ -1,7 +1,7 @@
-# Veridoc Specifications
+# rtl-aid Specifications
 
 ## 1. Overview
-Veridoc is a CI-native documentation layer for RTL projects. It parses Verilog source files, extracts structural information (ports, parameters, module instantiations), and generates consistent Markdown documentation.
+RTL Aid is a CI-native documentation layer for RTL projects. It parses Verilog source files, extracts structural information (ports, parameters, module instantiations), and generates consistent Markdown documentation.
 
 ## 2. Core Capabilities
 - **Regex-based Parsing**: Extracts module names, parameters, inputs, outputs, inouts, and instances.

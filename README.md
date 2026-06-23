@@ -1,4 +1,4 @@
-# veridoc
+# rtl-aid
 
 CI-native documentation layer for RTL projects.
 
@@ -10,29 +10,29 @@ Parses Verilog/SystemVerilog source files, extracts module structure, and genera
 
 | Command | Purpose |
 |---------|---------|
-| `veridoc` | Generate and maintain module documentation |
-| `verilint` | Run verilator lint and tag warnings inline in source |
+| `rtldoc` | Generate and maintain module documentation |
+| `rtllint` | Run verilator lint and tag warnings inline in source |
 
 ---
 
 ## Installation
 
 ```bash
-pip install veridoc
+pip install rtl-aid
 ```
 
 Or from source:
 
 ```bash
-git clone https://github.com/vishwaksen-1/veridoc
-cd veridoc
+git clone https://github.com/vishwaksen-1/rtl-aid
+cd rtl-aid
 pip install -e .
 ```
 
 **Requirements**
 
 - Python 3.7+
-- `verilint` requires [verilator](https://verilator.org) — a system binary, not installable via pip:
+- `rtllint` requires [verilator](https://verilator.org) — a system binary, not installable via pip:
 
 ```bash
 # Debian / Ubuntu
@@ -42,23 +42,23 @@ sudo apt install verilator
 brew install verilator
 ```
 
-`veridoc` has no external dependencies. If verilator is missing, `verilint` will exit with a clear error and install instructions.
+`rtldoc` has no external dependencies. If verilator is missing, `rtllint` will exit with a clear error and install instructions.
 
 ---
 
-## veridoc
+## rtldoc
 
 ### Quick start
 
 ```bash
 # Document all modules in a directory
-veridoc -d rtl/
+rtldoc -d rtl/
 
 # Document specific files
-veridoc -f rtl/core/alu.v rtl/core/decoder.v
+rtldoc -f rtl/core/alu.v rtl/core/decoder.v
 
 # Custom output directory
-veridoc -d rtl/ -o docs/modules/
+rtldoc -d rtl/ -o docs/modules/
 ```
 
 ### What gets generated
@@ -93,12 +93,12 @@ TODO: Add description
 - [cpu_core](cpu_core.md)
 ```
 
-The `Description` section is **never overwritten** — you write it once, veridoc preserves it on every run. All other sections are auto-managed.
+The `Description` section is **never overwritten** — you write it once, rtldoc preserves it on every run. All other sections are auto-managed.
 
 ### CLI reference
 
 ```
-veridoc (-d DIR [DIR...] | -f FILE [FILE...]) [options]
+rtldoc (-d DIR [DIR...] | -f FILE [FILE...]) [options]
 
 Input:
   -d, --dir DIR [DIR...]    Recursively scan directories for .v / .sv files
@@ -127,7 +127,7 @@ Verbosity:
 ```yaml
 # .github/workflows/docs.yml
 - name: Check RTL docs
-  run: veridoc -d rtl/ -o docs/modules/ --ci --print-errors
+  run: rtldoc -d rtl/ -o docs/modules/ --ci --print-errors
 ```
 
 Exit codes: `0` = clean, `1` = CI check failed.
@@ -139,7 +139,7 @@ Testbench files (`_tb.v`, `_tb.sv`, `_bench.v`, `_testbench.v`, and `.sv` varian
 Preview what would change before committing:
 
 ```bash
-veridoc -d rtl/ --dry-run
+rtldoc -d rtl/ --dry-run
 ```
 
 ```
@@ -153,7 +153,7 @@ veridoc -d rtl/ --dry-run
 ### Dependency graph
 
 ```bash
-veridoc -d rtl/ --json-graph -o docs/modules/
+rtldoc -d rtl/ --json-graph -o docs/modules/
 ```
 
 Writes `docs/modules/graph.json`:
@@ -173,23 +173,23 @@ Writes `docs/modules/graph.json`:
 
 ---
 
-## verilint
+## rtllint
 
 Runs `verilator --lint-only -Wall` on a file and tags each warned line with an inline comment. Useful for tracking lint debt without blocking a build.
 
 ### Usage
 
 ```bash
-verilint rtl/core/alu.v
+rtllint rtl/core/alu.v
 
 # With include directories
-verilint -I rtl/includes -I rtl/common rtl/core/alu.v
+rtllint -I rtl/includes -I rtl/common rtl/core/alu.v
 
 # Multiple files
-verilint rtl/core/*.v
+rtllint rtl/core/*.v
 
 # Preview without modifying files
-verilint --dry-run rtl/core/alu.v
+rtllint --dry-run rtl/core/alu.v
 ```
 
 ### What gets written
@@ -200,7 +200,7 @@ Given a verilator warning on line 75:
 %Warning-WIDTHEXPAND: rtl/alu.v:75:12: Operator ADD generates 9 bits ...
 ```
 
-verilint modifies `alu.v` in place:
+rtllint modifies `alu.v` in place:
 
 ```verilog
 // lint-test: verilator --lint-only -Wall rtl/alu.v
@@ -209,12 +209,12 @@ verilint modifies `alu.v` in place:
 assign result = a + b;  /* Check: Operator ADD generates 9 bits ... */
 ```
 
-Re-running verilint replaces existing `/* Check: */` tags — it does not stack duplicates.
+Re-running rtllint replaces existing `/* Check: */` tags — it does not stack duplicates.
 
 ### CLI reference
 
 ```
-verilint FILE [FILE...] [options]
+rtllint FILE [FILE...] [options]
 
   -I, --include DIR    Add include directory (repeatable)
   --dry-run            Show issues without modifying files

@@ -2,7 +2,7 @@ import unittest
 import os
 import tempfile
 import json
-from veridoc.core import VerilogWikiParser
+from rtl_aid.core import VerilogWikiParser
 
 class TestVerilogWikiParser(unittest.TestCase):
     def setUp(self):

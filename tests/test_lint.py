@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 from unittest.mock import patch, Mock
-from veridoc.lint import parse_lint_output, tag_file, _run_lint
+from rtl_aid.lint import parse_lint_output, tag_file, _run_lint
 
 
 SAMPLE_OUTPUT = """\
@@ -121,7 +121,7 @@ class TestTagFile(unittest.TestCase):
 class TestRunLintIncludeDirs(unittest.TestCase):
     def _run(self, include_dirs):
         mock_result = Mock(stdout="", stderr="")
-        with patch("veridoc.lint.subprocess.run", return_value=mock_result):
+        with patch("rtl_aid.lint.subprocess.run", return_value=mock_result):
             return _run_lint("foo.v", include_dirs)
 
     def test_include_dir_is_separate_arg(self):

@@ -7,14 +7,14 @@ Contributions are welcome. This document covers how to set up the project, run t
 ## Setup
 
 ```bash
-git clone https://github.com/your-org/veridoc
-cd veridoc
+git clone https://github.com/your-org/rtl-aid
+cd rtl-aid
 python -m venv .venv
 source .venv/bin/activate
 pip install -e .
 ```
 
-For `verilint` development, verilator must be installed:
+For `rtllint` development, verilator must be installed:
 
 ```bash
 # Debian / Ubuntu
@@ -29,10 +29,10 @@ brew install verilator
 ## Project structure
 
 ```
-src/veridoc/
+src/rtl_aid/
   core.py       VerilogWikiParser — parse, scan, generate docs
-  cli.py        veridoc CLI entry point
-  lint.py       verilint CLI entry point
+  cli.py        rtldoc CLI entry point
+  lint.py       rtllint CLI entry point
   __init__.py
 
 tests/
@@ -92,7 +92,7 @@ The parser is regex-based and will have edge cases. When fixing one:
 - Run against the `examples/USB4-project/` directory to catch regressions on real RTL:
 
 ```bash
-veridoc -d examples/USB4-project/design --dry-run
+rtldoc -d examples/USB4-project/design --dry-run
 ```
 
 ---

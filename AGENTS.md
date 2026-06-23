@@ -1,4 +1,4 @@
-# AGENTS.md — veridoc
+# AGENTS.md - rtl-aid
 
 Machine-readable reference for AI agents and agentic workflows.
 
@@ -6,25 +6,25 @@ Machine-readable reference for AI agents and agentic workflows.
 
 Two CLI tools for Verilog/SystemVerilog RTL projects:
 
-- `veridoc` — generates per-module Markdown docs from source. Extracts ports, parameters, and instantiation graph. Diff-aware: only rewrites changed files. Safe to run on every commit.
-- `verilint` — runs verilator lint on a file and tags each warned line inline with `/* Check: message */`. Idempotent. Does not block builds.
+- `rtldoc` — generates per-module Markdown docs from source. Extracts ports, parameters, and instantiation graph. Diff-aware: only rewrites changed files. Safe to run on every commit.
+- `rtllint` — runs verilator lint on a file and tags each warned line inline with `/* Check: message */`. Idempotent. Does not block builds.
 
 Primary agentic value: index an unfamiliar RTL codebase without reading every file. Use docs and the JSON graph to navigate module hierarchy, understand interfaces, and locate problems — at a fraction of the token cost of reading raw Verilog.
 
 ## Install
 
 ```
-pip install veridoc
+pip install rtl-aid
 ```
 
-No Python runtime dependencies. Requires Python 3.7+. `verilint` requires verilator (system binary — `apt install verilator` / `brew install verilator`). If verilator is absent, `verilint` exits 1 with install instructions; `veridoc` is unaffected.
+No Python runtime dependencies. Requires Python 3.7+. `rtllint` requires verilator (system binary — `apt install verilator` / `brew install verilator`). If verilator is absent, `rtllint` exits 1 with install instructions; `rtldoc` is unaffected.
 
-## veridoc
+## rtldoc
 
 ### Syntax
 
 ```
-veridoc (-d DIR [DIR...] | -f FILE [FILE...]) [-o OUT_DIR] [flags]
+rtldoc (-d DIR [DIR...] | -f FILE [FILE...]) [-o OUT_DIR] [flags]
 ```
 
 ### Flags
@@ -79,33 +79,33 @@ N module(s) processed — M doc(s) written, K unchanged
 
 Understand a codebase without reading source:
 ```
-veridoc -d rtl/ -o .agent/docs/ --json-graph
+rtldoc -d rtl/ -o .agent/docs/ --json-graph
 ```
 Then read `.agent/docs/<module>.md` for any module and `graph.json` for the full dependency map.
 
 Check if docs are in sync before editing:
 ```
-veridoc -d rtl/ -o docs/ --dry-run
+rtldoc -d rtl/ -o docs/ --dry-run
 ```
 Zero "would be written" = docs are current.
 
 Enforce documentation completeness in CI:
 ```
-veridoc -d rtl/ -o docs/ --ci --print-errors
+rtldoc -d rtl/ -o docs/ --ci --print-errors
 ```
 
 Preview impact of a source change:
 ```
-veridoc -f rtl/changed_module.v -o docs/ --dry-run -vv
+rtldoc -f rtl/changed_module.v -o docs/ --dry-run -vv
 ```
 Shows exactly which sections would change.
 
-## verilint
+## rtllint
 
 ### Syntax
 
 ```
-verilint FILE [FILE...] [-I DIR] [--dry-run] [-v]
+rtllint FILE [FILE...] [-I DIR] [--dry-run] [-v]
 ```
 
 ### Flags
@@ -142,13 +142,13 @@ rtl/module.v: 3 issue(s) would be tagged:
 
 Find all lint issues in a file without reading it:
 ```
-verilint --dry-run rtl/module.v
+rtllint --dry-run rtl/module.v
 ```
 Returns line numbers and messages. Agent can jump directly to flagged lines.
 
 Tag and surface lint debt for code review:
 ```
-verilint rtl/module.v
+rtllint rtl/module.v
 ```
 `/* Check: */` comments are then searchable with grep or any code search tool.
 
@@ -156,7 +156,7 @@ verilint rtl/module.v
 
 - **Testbench files are auto-excluded**: `_tb.v`, `_tb.sv`, `_bench.v`, `_testbench.v` and `.sv` variants
 - **Idempotent**: running either tool twice on unchanged input produces no changes
-- **Diff-aware writes**: veridoc never writes a file unless content changed — safe to run unconditionally
+- **Diff-aware writes**: rtldoc never writes a file unless content changed — safe to run unconditionally
 - **Structured JSON output**: `--json-graph` produces machine-parseable dependency data
 - **First run on a legacy codebase**: use `--dry-run` first to preview scope, then run without it
 
@@ -165,4 +165,4 @@ verilint rtl/module.v
 - One module parsed per file (first `module` block only)
 - Pre-2001 Verilog port style not supported
 - SystemVerilog interfaces, packages, and typedefs not extracted
-- verilint line-number tagging may be imprecise inside macro expansions (guarded, not fatal)
+- rtllint line-number tagging may be imprecise inside macro expansions (guarded, not fatal)

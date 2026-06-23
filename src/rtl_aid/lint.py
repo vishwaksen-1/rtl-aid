@@ -118,7 +118,7 @@ def tag_file(filepath, issues, lint_cmd):
 
 def main():
     parser = argparse.ArgumentParser(
-        prog="verilint",
+        prog="rtllint",
         description="Run verilator lint on Verilog files and tag warnings inline"
     )
     parser.add_argument(

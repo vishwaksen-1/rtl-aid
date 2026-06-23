@@ -3,7 +3,7 @@ requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "veridoc"
+name = "rtl-aid"
 version = "0.1.0"
 description = "CI-native documentation layer for RTL projects"
 readme = "README.md"
@@ -20,12 +20,12 @@ keywords = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/vishwaksen-1/veridoc"
-Issues = "https://github.com/vishwaksen-1/veridoc/issues"
+Homepage = "https://github.com/vishwaksen-1/rtl-aid"
+Issues = "https://github.com/vishwaksen-1/rtl-aid/issues"
 
 [project.scripts]
-veridoc = "veridoc.cli:main"
-verilint = "veridoc.lint:main"
+rtldoc = "rtl_aid.cli:main"
+rtllint = "rtl_aid.lint:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
