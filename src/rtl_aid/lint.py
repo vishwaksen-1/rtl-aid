@@ -33,14 +33,23 @@ def _check_verilator():
 def _run_lint(filepath, include_dirs):
     cmd = ["verilator", "--lint-only", "-Wall"]
     for d in include_dirs:
-        cmd.extend(["-I", d])
+        # Must be attached (-I<dir>), not space-separated: on Verilator 5.048
+        # `-I <dir>` is parsed as a bare positional module-search request and
+        # hard-errors with "Cannot find file containing module: '<dir>'".
+        cmd.append(f"-I{d}")
     cmd.append(filepath)
     result = subprocess.run(cmd, capture_output=True, text=True)
     return result.stdout + result.stderr, cmd
 
 
 def parse_lint_output(output, filepath):
-    """Return {line_num: message} for warnings/errors in filepath only.
+    """Return {line_num: (warning_id, message)} for warnings/errors in
+    filepath only.
+
+    warning_id is the part after 'Warning-' (e.g. 'WIDTHEXPAND'), or '' for
+    a bare %Error with no dashed category. Preserving it lets an agent cite
+    a stable rule ID when justifying a suppression, instead of only having
+    free-text that can reword between verilator versions.
 
     Only the first issue per line is kept — multiple warnings on the same
     line would produce unreadable inline comments. Verilator continuation
@@ -58,15 +67,101 @@ def parse_lint_output(output, filepath):
         m = pattern.match(line)
         if not m:
             continue
+        kind = m.group(1)
         warn_file = m.group(2)
         line_num = int(m.group(3))
         message = m.group(4).strip()
+        warning_id = kind.split("-", 1)[1] if "-" in kind else ""
 
         if (os.path.basename(warn_file) == target_base
                 or os.path.abspath(warn_file) == target_abs):
             if line_num not in issues:
-                issues[line_num] = message
+                issues[line_num] = (warning_id, message)
 
+    return issues
+
+
+def _strip_comments(text):
+    """Blank out comment content while preserving line numbers, so English
+    words like 'generate' or 'begin' inside a // comment can't be mistaken
+    for source keywords by the custom checks below."""
+    text = re.sub(r"//[^\n]*", "", text)
+    text = re.sub(r"/\*.*?\*/", lambda m: "\n" * m.group(0).count("\n"), text, flags=re.S)
+    return text
+
+
+_ALWAYS_SENS_RE = re.compile(r"always\s*@\s*\(([^)]*)\)")
+_IDENT_RE = re.compile(r"\b[A-Za-z_]\w*\b")
+_ASSIGN_RHS_RE = re.compile(r"(?:<=|(?<![=!<>])=(?!=))\s*([^;]+);")
+_COND_RE = re.compile(r"\b(?:if|case)\s*\(([^)]*)\)")
+_SENS_KEYWORDS = {"begin", "end", "if", "else", "case", "endcase", "default"}
+
+
+def _find_always_block(text, start):
+    """Return the text of the block following an always(...) header: a
+    begin/end block if present, otherwise a single statement up to ';'."""
+    rest = text[start:]
+    begin_match = re.match(r"\s*begin\b", rest)
+    if not begin_match:
+        end = rest.find(";")
+        return rest[: end + 1] if end != -1 else rest
+
+    depth = 1
+    pos = begin_match.end()
+    for kw in re.finditer(r"\bbegin\b|\bend\b", rest[pos:]):
+        depth += 1 if kw.group(0) == "begin" else -1
+        if depth == 0:
+            return rest[: pos + kw.end()]
+    return rest
+
+
+def check_sensitivity_completeness(text):
+    """Flag `always @(sig, ...)` blocks (explicit signal list — not `@*` and
+    not clocked with posedge/negedge) that read a signal missing from their
+    own sensitivity list. Verilator's -Wall does not catch this.
+    """
+    issues = {}
+    text = _strip_comments(text)
+    for m in _ALWAYS_SENS_RE.finditer(text):
+        sens_text = m.group(1).strip()
+        if not sens_text or sens_text == "*" or re.search(r"\b(posedge|negedge)\b", sens_text):
+            continue
+
+        sens_signals = {s.strip() for s in sens_text.split(",") if s.strip()}
+        block = _find_always_block(text, m.end())
+
+        read = set()
+        for cond in _COND_RE.findall(block):
+            read.update(_IDENT_RE.findall(cond))
+        for rhs in _ASSIGN_RHS_RE.findall(block):
+            read.update(_IDENT_RE.findall(rhs))
+        read -= _SENS_KEYWORDS
+
+        missing = sorted(read - sens_signals)
+        if missing:
+            line_num = text[: m.start()].count("\n") + 1
+            issues[line_num] = (
+                "SENSINCOMPLETE",
+                f"Signal(s) {', '.join(missing)} read but missing from sensitivity list",
+            )
+    return issues
+
+
+def check_unlabeled_generate(text):
+    """Flag `generate` blocks containing a `begin` with no `: label`.
+    Verilator's -Wall does not catch this."""
+    issues = {}
+    text = _strip_comments(text)
+    for m in re.finditer(r"\bgenerate\b(.*?)\bendgenerate\b", text, flags=re.S):
+        block = m.group(1)
+        block_start = m.start(1)
+        for bm in re.finditer(r"\bbegin\b(\s*:\s*\w+)?", block):
+            if not bm.group(1):
+                line_num = text[: block_start + bm.start()].count("\n") + 1
+                issues[line_num] = (
+                    "GENUNNAMED",
+                    "generate block contains an unlabeled 'begin' (missing ': label')",
+                )
     return issues
 
 
@@ -79,17 +174,19 @@ def tag_file(filepath, issues, lint_cmd):
     with open(filepath, "r") as f:
         lines = f.readlines()
 
-    # Tag each warned line with a trailing /* Check: ... */ comment.
+    # Tag each warned line with a trailing /* Check: ... */ comment (or
+    # /* Check[ID]: ... */ when a stable warning ID is available).
     # Verilator line numbers are 1-based; Python list is 0-based.
     # Guard against line numbers that fall outside the file — this can
     # happen when a warning originates inside a macro expansion.
-    for line_num, message in sorted(issues.items()):
+    for line_num, (warning_id, message) in sorted(issues.items()):
         idx = line_num - 1
         if idx < 0 or idx >= len(lines):
             continue
         line = lines[idx].rstrip("\n")
-        line = re.sub(r"\s*/\* Check:.*?\*/", "", line).rstrip()
-        lines[idx] = f"{line}  /* Check: {message} */\n"
+        line = re.sub(r"\s*/\* Check(\[[^\]]*\])?:.*?\*/", "", line).rstrip()
+        tag = f"Check[{warning_id}]" if warning_id else "Check"
+        lines[idx] = f"{line}  /* {tag}: {message} */\n"
 
     # Insert lint/tb-test headers after the leading comment block (copyright
     # headers, file-level comments, blank lines at the top).
@@ -161,6 +258,14 @@ def main():
         output, cmd = _run_lint(filepath, args.include_dirs)
         issues = parse_lint_output(output, filepath)
 
+        with open(filepath) as f:
+            source = f.read()
+        # Custom checks catch things verilator's -Wall doesn't (sensitivity
+        # list completeness, unlabeled generate blocks). A verilator finding
+        # on the same line always wins.
+        for ln, issue in {**check_sensitivity_completeness(source), **check_unlabeled_generate(source)}.items():
+            issues.setdefault(ln, issue)
+
         if args.v and output.strip():
             print(output.strip())
 
@@ -171,8 +276,9 @@ def main():
         any_issues = True
         if args.dry_run:
             print(f"\n{filepath}: {len(issues)} issue(s) would be tagged:")
-            for ln, msg in sorted(issues.items()):
-                print(f"  Line {ln}: {msg}")
+            for ln, (warning_id, msg) in sorted(issues.items()):
+                tag = f"[{warning_id}] " if warning_id else ""
+                print(f"  Line {ln}: {tag}{msg}")
         else:
             tag_file(filepath, issues, cmd)
             print(f"{filepath}: tagged {len(issues)} issue(s)")

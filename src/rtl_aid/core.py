@@ -3,6 +3,53 @@ import os
 import tempfile
 import json
 import sys
+import ast
+import operator
+
+_BASE_TYPES = {
+    "integer", "logic", "reg", "wire", "bit", "byte",
+    "shortint", "int", "longint", "signed", "unsigned",
+}
+
+_PARAM_NAME_VALUE_RE = re.compile(r"^(\w+)\s*=\s*(.+)$")
+_BARE_INT_RE = re.compile(r"^-?\d+$")
+
+_SAFE_BINOPS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.FloorDiv: operator.floordiv,
+    ast.Div: operator.floordiv,
+}
+
+
+def _safe_eval_int(expr):
+    """Evaluate a plain integer arithmetic expression without exec/eval.
+
+    Only +, -, *, /, parens and integer literals are allowed; anything else
+    (sized literals, function calls, unresolved names) returns None.
+    """
+    try:
+        node = ast.parse(expr, mode="eval").body
+    except SyntaxError:
+        return None
+    return _eval_ast_node(node)
+
+
+def _eval_ast_node(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, int):
+        return node.value
+    if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_BINOPS:
+        left = _eval_ast_node(node.left)
+        right = _eval_ast_node(node.right)
+        if left is None or right is None:
+            return None
+        return _SAFE_BINOPS[type(node.op)](left, right)
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        value = _eval_ast_node(node.operand)
+        return None if value is None else -value
+    return None
+
 
 class VerilogWikiParser(object):
     def __init__(self, paths, verbose=0, ci=False, json_graph=False, print_errors=False, exclude=None, dry_run=False):
@@ -27,6 +74,28 @@ class VerilogWikiParser(object):
         return text
 
     # -------------------------
+    # `define RESOLUTION (single-file only, no `include)
+    # -------------------------
+    def resolve_defines(self, text):
+        defines = dict(re.findall(r"^\s*`define\s+(\w+)\s+(.+?)\s*$", text, flags=re.M))
+        if not defines:
+            return text
+        return re.sub(r"`(\w+)", lambda m: defines.get(m.group(1), m.group(0)), text)
+
+    def _resolve_parameter_expr(self, expr, known_values):
+        substituted = expr
+        for name, value in known_values.items():
+            substituted = re.sub(rf"\b{re.escape(name)}\b", str(value), substituted)
+        return _safe_eval_int(substituted)
+
+    def _format_parameter(self, keyword, raw):
+        param_str = re.sub(rf"\b{keyword}\b", "", raw).strip()
+        param_str = re.sub(
+            rf"^({'|'.join(_BASE_TYPES)})\s+", "", param_str
+        ).strip()
+        return param_str
+
+    # -------------------------
     # PARSING
     # -------------------------
     def extract_module_and_ports(self, text):
@@ -41,13 +110,34 @@ class VerilogWikiParser(object):
 
         inputs, outputs, inouts = [], [], []
         parameters = []
+        known_values = {}
 
         for p in re.split(r",\s*\n|,\s*", param_block):
             p = p.strip()
-            if p.startswith("parameter"):
-                param_str = re.sub(r"\bparameter\b", "", p).strip()
-                param_str = re.sub(r"^(integer|logic|reg|wire|bit|byte|shortint|int|longint|signed|unsigned)\s+", "", param_str)
-                parameters.append(param_str.strip())
+            is_localparam = p.startswith("localparam")
+            if not (p.startswith("parameter") or is_localparam):
+                continue
+
+            keyword = "localparam" if is_localparam else "parameter"
+            param_str = self._format_parameter(keyword, p)
+
+            display = param_str
+            name_value = _PARAM_NAME_VALUE_RE.match(param_str)
+            if name_value:
+                pname, pexpr = name_value.group(1), name_value.group(2).strip()
+                if _BARE_INT_RE.match(pexpr):
+                    known_values[pname] = int(pexpr)
+                else:
+                    resolved = self._resolve_parameter_expr(pexpr, known_values)
+                    if resolved is not None:
+                        known_values[pname] = resolved
+                        display = f"{pname} = {pexpr}  (= {resolved})"
+                    else:
+                        display = f"{pname} = {pexpr}  (unresolved)"
+
+            if is_localparam:
+                display = f"{display} (localparam)"
+            parameters.append(display)
 
         ports = re.split(r",\s*\n|,\s*", port_block)
 
@@ -57,12 +147,12 @@ class VerilogWikiParser(object):
             if not p:
                 continue
 
-            p = re.sub(r"`\w+\s+", "", p)
             tokens = p.split()
             if not tokens:
                 continue
 
             name = tokens[-1]
+            type_tokens = [t for t in tokens[:-1] if t not in ("input", "output", "inout")]
 
             if "input" in tokens:
                 current_direction = "input"
@@ -71,12 +161,27 @@ class VerilogWikiParser(object):
             elif "inout" in tokens:
                 current_direction = "inout"
 
+            width = ""
+            custom_type = ""
+            for t in type_tokens:
+                if t.startswith("["):
+                    width = t
+                elif t not in _BASE_TYPES:
+                    custom_type = t
+
+            if width:
+                display = f"{name} {width}"
+            elif custom_type:
+                display = f"{name} ({custom_type})"
+            else:
+                display = name
+
             if current_direction == "input":
-                inputs.append(name)
+                inputs.append(display)
             elif current_direction == "output":
-                outputs.append(name)
+                outputs.append(display)
             elif current_direction == "inout":
-                inouts.append(name)
+                inouts.append(display)
 
         return {
             "name": mod_name,
@@ -141,6 +246,7 @@ class VerilogWikiParser(object):
         for path in all_files:
             with open(path, "r") as fh:
                 text = self.clean(fh.read())
+            text = self.resolve_defines(text)
 
             file_texts[path] = text
 
