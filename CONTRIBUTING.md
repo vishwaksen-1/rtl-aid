@@ -36,8 +36,22 @@ src/rtl_aid/
   __init__.py
 
 tests/
-  test_core.py  Tests for core doc generation
-  test_lint.py  Tests for lint output parsing and file tagging
+  test_core.py  Thin entry point — re-exports everything from tests/core/
+  test_lint.py  Thin entry point — re-exports everything from tests/lint/
+  support.py    Shared fixture-loading helpers
+  core/
+    fixtures/         .v/.sv fixture files used by core tests
+    test_parsing.py   Port/parameter/dependency extraction
+    test_ci.py        --ci checks, --json-graph
+    test_markdown.py  Doc generation, idempotency
+    test_gaps.py       Known-gap regression tests (see "TDD gap tests" below)
+  lint/
+    fixtures/                     .v fixture files used by lint tests
+    test_parse_output.py         verilator-output parsing
+    test_tag_file.py             inline tagging / header insertion
+    test_include_dirs.py         -I flag command construction (mocked subprocess)
+    test_gaps.py                  Known-gap regression tests
+    test_verilator_integration.py Real-verilator end-to-end checks (skipped if verilator absent)
 
 docs/
   specs.md      Formal specification
@@ -55,7 +69,17 @@ examples/
 python -m unittest discover tests/ -v
 ```
 
-All tests run without verilator or any external dependencies. Tests in `test_lint.py` exercise the parser and file-tagging logic in isolation — the subprocess call to verilator is not tested.
+Most tests run without verilator or any external dependencies — they exercise the parser and file-tagging logic in isolation, mocking the subprocess call where needed. The exception is `tests/lint/test_verilator_integration.py`, which shells out to a real `verilator` to prove behavior that's specific to verilator's actual CLI parsing (e.g. the `-I` flag) — those tests `skipUnless(shutil.which("verilator"))` and are silently skipped if verilator isn't installed, so the suite as a whole never requires it.
+
+Note: `python -m unittest discover tests/ -v` recurses into `tests/core/` and `tests/lint/` directly *and* runs them again via the `tests/test_core.py`/`tests/test_lint.py` re-export wrappers, so each test appears to run twice under two different qualified names. This is expected — it's the tradeoff of keeping thin top-level entry points via `import *` re-export rather than dropping them in favor of bare `discover` recursion.
+
+### Fixtures, not inline source
+
+RTL source used by a test belongs in that suite's `fixtures/` directory as a real `.v`/`.sv` file, not built inline with `f.write(...)`/tempfile string literals. Reasons: it's readable as actual RTL, it's reusable across tests, and diffs on fixture changes are easy to review. If a test needs to *mutate* a file (e.g. `tag_file`), copy the fixture into a `tempfile.TemporaryDirectory()` first via `tests/support.copy_fixture()` — never mutate the checked-in fixture.
+
+### TDD gap tests
+
+`tests/core/test_gaps.py` and `tests/lint/test_gaps.py` hold tests written *before* their corresponding fix, asserting the correct/desired behavior (not the current one) for known gaps tracked in `TODO.md`. When one of these was red and is now green, the fix has landed — see `TODO.md` and `checklist.md` for the current status of each. New known gaps should get a test here first, red, before the fix.
 
 ---
 
@@ -87,7 +111,7 @@ All tests run without verilator or any external dependencies. Tests in `test_lin
 
 The parser is regex-based and will have edge cases. When fixing one:
 
-- Add a test case that reproduces the failure before touching `core.py`.
+- Add a test case (with a fixture file under `tests/core/fixtures/`, ideally in `test_gaps.py`) that reproduces the failure before touching `core.py`. It should fail first, then pass once the fix lands.
 - Check that `test_markdown_generation_and_logging` still passes — it verifies the idempotency guarantee.
 - Run against the `examples/USB4-project/` directory to catch regressions on real RTL:
 

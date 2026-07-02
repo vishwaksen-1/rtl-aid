@@ -7,7 +7,7 @@ Machine-readable reference for AI agents and agentic workflows.
 Two CLI tools for Verilog/SystemVerilog RTL projects:
 
 - `rtldoc` — generates per-module Markdown docs from source. Extracts ports, parameters, and instantiation graph. Diff-aware: only rewrites changed files. Safe to run on every commit.
-- `rtllint` — runs verilator lint on a file and tags each warned line inline with `/* Check: message */`. Idempotent. Does not block builds.
+- `rtllint` — runs verilator lint on a file, plus two rtl-aid-native checks (incomplete sensitivity lists, unlabeled `generate` blocks) verilator's `-Wall` doesn't cover, and tags each warned line inline with `/* Check: message */` (or `/* Check[ID]: message */` when a rule ID is available). Idempotent. Does not block builds.
 
 Primary agentic value: index an unfamiliar RTL codebase without reading every file. Use docs and the JSON graph to navigate module hierarchy, understand interfaces, and locate problems — at a fraction of the token cost of reading raw Verilog.
 
@@ -48,6 +48,13 @@ rtldoc (-d DIR [DIR...] | -f FILE [FILE...]) [-o OUT_DIR] [flags]
 Sections always present: Description, Parameters, Inputs, Outputs, Inouts, Calls, Called By.
 
 `Description` is user-managed — never overwritten. All other sections are auto-generated.
+
+**Port entries** include width/type detail when available:
+- Vector port: `data [7:0]`
+- Struct/enum-typed port (typedef'd, not a base type): `p (pair_t)`, `st (state_t)`
+- Plain scalar port: just the name, e.g. `clk`
+
+**Parameter entries** resolve simple integer arithmetic alongside the raw expression: `DERIVED = BASE * 2  (= 8)`. Unresolvable expressions are marked `(unresolved)`, never guessed. `localparam` entries are included, suffixed `(localparam)`.
 
 **graph.json** (with `--json-graph`):
 
@@ -118,8 +125,14 @@ rtllint FILE [FILE...] [-I DIR] [--dry-run] [-v]
 
 ### Output
 
+Runs `verilator --lint-only -Wall`, then merges in two rtl-aid-native checks that verilator doesn't perform:
+- `SENSINCOMPLETE` — an `always @(sig, ...)` block (explicit list, not `@*`, not clocked) reads a signal missing from its own sensitivity list
+- `GENUNNAMED` — a `generate` block contains an unlabeled `begin` (no `: label`)
+
+A verilator finding on a given line always takes priority over a custom-check finding on the same line.
+
 Modifies source file in-place:
-- Appends `/* Check: message */` to each warned line
+- Appends `/* Check: message */` to each warned line — or `/* Check[ID]: message */` when a rule ID is available (verilator's own dashed category, e.g. `WIDTHEXPAND`, or one of the two IDs above)
 - Inserts `// lint-test: <command>` and `// tb-test: tba` after the leading comment block
 - Re-running replaces existing `/* Check: */` tags — does not stack
 
@@ -164,5 +177,7 @@ rtllint rtl/module.v
 
 - One module parsed per file (first `module` block only)
 - Pre-2001 Verilog port style not supported
-- SystemVerilog interfaces, packages, and typedefs not extracted
+- SystemVerilog interfaces, packages are not extracted; `typedef` port types are shown by name only (e.g. `p (pair_t)`) — the typedef's own definition is not resolved or flattened
+- `` `define `` is substituted before parsing, but only within a single file — `` `include ``-based macro sharing across files is not supported
 - rtllint line-number tagging may be imprecise inside macro expansions (guarded, not fatal)
+- rtllint's custom checks (`SENSINCOMPLETE`, `GENUNNAMED`) are regex-based on a single file's text, same precision tier as the rest of the parser — not a full elaborator

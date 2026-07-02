@@ -78,12 +78,12 @@ TODO: Add description
 ## Inputs
 - clk
 - rst
-- op
-- operand_a
-- operand_b
+- op [OP_WIDTH-1:0]
+- operand_a [DATA_WIDTH-1:0]
+- operand_b [DATA_WIDTH-1:0]
 
 ## Outputs
-- result
+- result [DATA_WIDTH-1:0]
 - overflow
 
 ## Calls
@@ -94,6 +94,14 @@ TODO: Add description
 ```
 
 The `Description` section is **never overwritten** — you write it once, rtldoc preserves it on every run. All other sections are auto-managed.
+
+### Port and parameter detail
+
+- **Vector ports** show their packed width next to the name: `operand_a [DATA_WIDTH-1:0]`.
+- **Struct- or enum-typed ports** (typedef'd, not a base type) show the type name instead: `p (pair_t)`, `st (state_t)`.
+- **Plain scalar ports** (`input logic clk`) render as just the name — no width or type to add.
+- **Parameters** resolve simple integer arithmetic and show both the raw expression and the resolved value: `DERIVED = BASE * 2  (= 8)`. Anything rtldoc can't resolve (sized literals, unknown references, non-arithmetic expressions) is marked `(unresolved)` rather than guessed at.
+- **`localparam`** entries are listed alongside `parameter`s, suffixed `(localparam)` to distinguish them: `DEPTH = WIDTH*2  (= 16) (localparam)`.
 
 ### CLI reference
 
@@ -175,7 +183,13 @@ Writes `docs/modules/graph.json`:
 
 ## rtllint
 
-Runs `verilator --lint-only -Wall` on a file and tags each warned line with an inline comment. Useful for tracking lint debt without blocking a build.
+Runs `verilator --lint-only -Wall` on a file, plus two rtl-aid-native checks verilator's `-Wall` doesn't cover, and tags each warned line with an inline comment. Useful for tracking lint debt without blocking a build.
+
+**Beyond verilator**, rtllint also flags:
+- Incomplete sensitivity lists — `always @(a) y = a & b;` with `b` missing from the list
+- Unlabeled `generate` blocks — `generate ... begin ... end ... endgenerate` with no `: label`
+
+Both run directly on the source text, independent of the verilator subprocess call.
 
 ### Usage
 
@@ -206,8 +220,10 @@ rtllint modifies `alu.v` in place:
 // lint-test: verilator --lint-only -Wall rtl/alu.v
 // tb-test: tba
 ...
-assign result = a + b;  /* Check: Operator ADD generates 9 bits ... */
+assign result = a + b;  /* Check[WIDTHEXPAND]: Operator ADD generates 9 bits ... */
 ```
+
+When a rule ID is available — verilator's own (e.g. `WIDTHEXPAND`) or rtl-aid's custom checks (`SENSINCOMPLETE`, `GENUNNAMED`) — the tag includes it as `/* Check[ID]: message */` so it can be cited when suppressing or grepped for later. A bare `%Error` with no dashed ID falls back to plain `/* Check: message */`.
 
 Re-running rtllint replaces existing `/* Check: */` tags — it does not stack duplicates.
 
@@ -243,6 +259,11 @@ Exit codes: `0` = no issues found, `1` = one or more warnings/errors.
 | ANSI port declarations | Supported |
 | Comma-inherited port direction (`output reg a, b`) | Supported |
 | Parameterised modules (`#(parameter ...)`) | Supported |
+| `localparam` (distinguished from `parameter`) | Supported |
+| Simple integer parameter expressions (`BASE * 2`) | Supported (resolved alongside the raw expression) |
+| Port widths and struct/enum types in generated docs | Supported |
+| `` `define `` macro substitution before parsing | Supported (single-file only) |
+| `` `include `` across files | Not supported |
 | Module instantiations with `#()` param override | Supported |
 | Testbench auto-exclusion | Supported |
 | Pre-2001 Verilog style | Not supported |
