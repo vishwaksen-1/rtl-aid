@@ -1,5 +1,11 @@
 # ToDos:
 
+- [x] Add a `--version` flag to rtllint and rtldoc to print the current version of the tool.
+	Implemented: Both tools now accept `--version` flag and display version from `__version__` in `__init__.py`
+	Usage: `rtldoc --version` → `rtldoc 0.2.1` | `rtllint --version` → `rtllint 0.2.1`
+
+- [ ] Add a github actions template for a new repo, with a pre-filled `rtllint`/`rtldoc` workflow and a stub `README.md`.
+
 - [ ] Add a Graphviz export for the dependency graph of callgraph. Preferably as a separate tool to work on the generated json graph.
 
 - [ ] MCP server wrapper

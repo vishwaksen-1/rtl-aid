@@ -4,6 +4,7 @@ import sys
 import os
 import argparse
 import shutil
+from . import __version__
 
 
 def _get_verilator_version():
@@ -227,6 +228,11 @@ def main():
     parser = argparse.ArgumentParser(
         prog="rtllint",
         description="Run verilator lint on Verilog files and tag warnings inline"
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}"
     )
     parser.add_argument(
         "file",

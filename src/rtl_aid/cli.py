@@ -1,8 +1,15 @@
 import argparse
+from . import __version__
 from .core import VerilogWikiParser
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="rtldoc")
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}"
+    )
 
     group = parser.add_mutually_exclusive_group(required=True)
     
