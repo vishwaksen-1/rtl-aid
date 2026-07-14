@@ -4,6 +4,7 @@ from tests.lint.test_tag_file import *  # noqa: F401,F403
 from tests.lint.test_include_dirs import *  # noqa: F401,F403
 from tests.lint.test_gaps import *  # noqa: F401,F403
 from tests.lint.test_verilator_integration import *  # noqa: F401,F403
+from tests.lint.test_rtllint_command_tagging import *  # noqa: F401,F403
 
 if __name__ == "__main__":
     import unittest

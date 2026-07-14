@@ -49,9 +49,15 @@ def main():
     parser.add_argument(
         "--json-graph",
         action="store_true",
-        help="Generate dependency graph as JSON (graph.json) in output directory"
+        help="Generate dependency graph as JSON (graph.json)"
     )
-    
+
+    parser.add_argument(
+        "--json-graph-dir",
+        metavar="DIR",
+        help="Directory to write graph.json (only used with --json-graph; default: output directory)"
+    )
+
     parser.add_argument(
         "--exclude",
         nargs="+",
@@ -74,6 +80,7 @@ def main():
         verbose=args.v,
         ci=args.ci,
         json_graph=args.json_graph,
+        json_graph_dir=args.json_graph_dir,
         print_errors=args.print_errors,
         exclude=args.exclude,
         dry_run=args.dry_run,

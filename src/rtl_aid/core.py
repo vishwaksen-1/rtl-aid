@@ -52,7 +52,7 @@ def _eval_ast_node(node):
 
 
 class VerilogWikiParser(object):
-    def __init__(self, paths, verbose=0, ci=False, json_graph=False, print_errors=False, exclude=None, dry_run=False):
+    def __init__(self, paths, verbose=0, ci=False, json_graph=False, json_graph_dir=None, print_errors=False, exclude=None, dry_run=False):
         self.paths = paths
         self.modules = {}
         self.called_by = {}
@@ -60,6 +60,7 @@ class VerilogWikiParser(object):
         self.verbose = verbose
         self.ci = ci
         self.json_graph = json_graph
+        self.json_graph_dir = json_graph_dir
         self.print_errors = print_errors
         self.exclude = exclude or []
         self.issues = []
@@ -436,9 +437,13 @@ class VerilogWikiParser(object):
                 "called_by": self.called_by.get(m, [])
             }
 
-        path = os.path.join(out_dir, "graph.json")
-        with open(path, "w") as f:
-            json.dump(graph, f, indent=2)
+        graph_dir = self.json_graph_dir if self.json_graph_dir else out_dir
+        if not self.dry_run:
+            os.makedirs(graph_dir, exist_ok=True)
+        path = os.path.join(graph_dir, "graph.json")
+        if not self.dry_run:
+            with open(path, "w") as f:
+                json.dump(graph, f, indent=2)
 
     # -------------------------
     # CI VALIDATION

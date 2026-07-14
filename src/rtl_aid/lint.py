@@ -203,6 +203,16 @@ def tag_file(filepath, issues, lint_cmd):
     new_headers = []
     if "// lint-test:" not in full_content:
         new_headers.append(f"// lint-test: {lint_cmd_str}\n")
+    else:
+        # Update existing lint-test line with the new command
+        new_lines = []
+        for line in lines[:insert_idx]:
+            if line.strip().startswith("// lint-test:"):
+                new_lines.append(f"// lint-test: {lint_cmd_str}\n")
+            else:
+                new_lines.append(line)
+        lines = new_lines + lines[insert_idx:]
+
     if "// tb-test:" not in full_content:
         new_headers.append("// tb-test: tba\n")
 
@@ -255,7 +265,7 @@ def main():
             print(f"Error: {filepath}: file not found", file=sys.stderr)
             continue
 
-        output, cmd = _run_lint(filepath, args.include_dirs)
+        output, _ = _run_lint(filepath, args.include_dirs)
         issues = parse_lint_output(output, filepath)
 
         with open(filepath) as f:
@@ -274,13 +284,19 @@ def main():
             continue
 
         any_issues = True
+        # Build rtllint command for tagging
+        rtllint_cmd = ["rtllint"]
+        for d in args.include_dirs:
+            rtllint_cmd.append(f"-I{d}")
+        rtllint_cmd.append(filepath)
+
         if args.dry_run:
             print(f"\n{filepath}: {len(issues)} issue(s) would be tagged:")
             for ln, (warning_id, msg) in sorted(issues.items()):
                 tag = f"[{warning_id}] " if warning_id else ""
                 print(f"  Line {ln}: {tag}{msg}")
         else:
-            tag_file(filepath, issues, cmd)
+            tag_file(filepath, issues, rtllint_cmd)
             print(f"{filepath}: tagged {len(issues)} issue(s)")
 
     sys.exit(1 if any_issues else 0)
