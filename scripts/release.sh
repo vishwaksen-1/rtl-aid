@@ -4,11 +4,12 @@
 # Release Management Script for rtl-aid
 #
 # Orchestrates the full release workflow:
-# 1. Validates new version against current version
-# 2. Confirms changes to version files
-# 3. Confirms documentation updates
-# 4. Builds distribution packages
-# 5. Uploads to TestPyPI and PyPI
+# 1. Queries PyPI for the current published version
+# 2. Validates new version against current version
+# 3. Confirms changes to version files
+# 4. Confirms documentation updates
+# 5. Builds distribution packages
+# 6. Uploads to TestPyPI and PyPI
 #
 # Usage: ./scripts/release.sh
 #
@@ -28,33 +29,52 @@ NC='\033[0m' # No Color
 
 # Helper functions
 print_header() {
-    echo -e "\n${BLUE}==== $1 ====${NC}\n"
+    printf "\n${BLUE}==== %s ====${NC}\n\n" "$1"
 }
 
 print_success() {
-    echo -e "${GREEN}✓ $1${NC}"
+    printf "${GREEN}✓ %s${NC}\n" "$1"
 }
 
 print_error() {
-    echo -e "${RED}✗ $1${NC}"
+    printf "${RED}✗ %s${NC}\n" "$1"
 }
 
 print_warning() {
-    echo -e "${YELLOW}⚠ $1${NC}"
+    printf "${YELLOW}⚠ %s${NC}\n" "$1"
+}
+
+print_info() {
+    printf "${BLUE}%s${NC}\n" "$1"
 }
 
 ask_yes_no() {
     local prompt="$1"
     local answer
     while true; do
-        read -p "$(echo -e ${BLUE}$prompt${NC}) (y/n) " -n 1 -r answer
-        echo
+        printf "${BLUE}%s${NC} (y/n) " "$prompt"
+        read -r -n 1 answer
+        printf "\n"
         case $answer in
             [Yy]) return 0 ;;
             [Nn]) return 1 ;;
             *) echo "Please answer y or n" ;;
         esac
     done
+}
+
+# Get version from PyPI API
+get_pypi_version() {
+    python3 << 'EOF'
+try:
+    import json
+    import urllib.request
+    response = urllib.request.urlopen('https://pypi.org/pypi/rtl-aid/json', timeout=5)
+    data = json.loads(response.read().decode())
+    print(data['info']['version'])
+except Exception as e:
+    print(f"unknown")
+EOF
 }
 
 # Compare semantic versions
@@ -72,8 +92,8 @@ version_gt() {
     [[ "$(printf '%s\n' "$current" "$new" | sort -V | head -n1)" == "$current" ]]
 }
 
-# Extract current version from pyproject.toml
-get_current_version() {
+# Extract version from file
+get_file_version() {
     grep -oP 'version = "\K[^"]+' "$PYPROJECT_TOML"
 }
 
@@ -83,13 +103,21 @@ main() {
 
     print_header "rtl-aid Release Manager"
 
-    # Get current version
-    CURRENT_VERSION=$(get_current_version)
-    echo "Current version: ${YELLOW}${CURRENT_VERSION}${NC}"
+    # Get current published version from PyPI
+    printf "Querying PyPI for current published version...\n"
+    PYPI_VERSION=$(get_pypi_version)
+
+    if [[ "$PYPI_VERSION" == "unknown" ]]; then
+        print_warning "Could not reach PyPI (offline?). Using local pyproject.toml instead."
+        PYPI_VERSION=$(get_file_version)
+    fi
+
+    printf "Published on PyPI: ${YELLOW}%s${NC}\n" "$PYPI_VERSION"
+    printf "Local version in pyproject.toml: ${YELLOW}%s${NC}\n\n" "$(get_file_version)"
 
     # Ask for new version
-    echo
-    read -p "$(echo -e ${BLUE}Enter new version number:${NC}) " NEW_VERSION
+    printf "${BLUE}Enter new version number:${NC} "
+    read -r NEW_VERSION
 
     # Validate version format (basic check for X.Y.Z)
     if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -97,13 +125,13 @@ main() {
         exit 1
     fi
 
-    # Check if new version is greater than current
-    if ! version_gt "$NEW_VERSION" "$CURRENT_VERSION"; then
-        print_error "New version ($NEW_VERSION) must be greater than current version ($CURRENT_VERSION)"
+    # Check if new version is greater than PyPI version
+    if ! version_gt "$NEW_VERSION" "$PYPI_VERSION"; then
+        print_error "New version ($NEW_VERSION) must be greater than published version ($PYPI_VERSION)"
         exit 1
     fi
 
-    print_success "Version $NEW_VERSION is valid (greater than $CURRENT_VERSION)"
+    print_success "Version $NEW_VERSION is valid (greater than $PYPI_VERSION)"
 
     # Check version file updates
     print_header "Version Files Verification"
@@ -119,8 +147,8 @@ main() {
     fi
 
     # Verify the files actually have the new version
-    PYPROJECT_VERSION=$(get_current_version)
-    INIT_VERSION=$(grep -oP "__version__ = \"\K[^\"]+\"" "$INIT_PY" | tr -d '"')
+    PYPROJECT_VERSION=$(get_file_version)
+    INIT_VERSION=$(grep -oP '__version__ = "\K[^"]+' "$INIT_PY")
 
     if [[ "$PYPROJECT_VERSION" != "$NEW_VERSION" ]]; then
         print_error "pyproject.toml still has version $PYPROJECT_VERSION, expected $NEW_VERSION"
@@ -158,10 +186,10 @@ main() {
     fi
 
     # Install build tools if needed
-    echo "Installing/updating build tools..."
+    printf "Installing/updating build tools...\n"
     python -m pip install --upgrade build twine -q
 
-    echo "Building distribution packages for version $NEW_VERSION..."
+    printf "Building distribution packages for version %s...\n" "$NEW_VERSION"
     python -m build
 
     # Verify built artifacts
@@ -176,19 +204,19 @@ main() {
     fi
 
     print_success "Build artifacts created:"
-    ls -lh "$WHEEL_FILE" "$TAR_FILE" | awk '{print "  " $9 " (" $5 ")"}'
+    ls -lh "$WHEEL_FILE" "$TAR_FILE" | awk '{printf "  %s (%s)\n", $9, $5}'
 
     # TestPyPI upload
     print_header "TestPyPI Upload"
 
     if ask_yes_no "Upload to TestPyPI first (recommended)?"; then
         echo
-        echo "Uploading $NEW_VERSION to TestPyPI..."
-        echo "=================================================="
+        printf "Uploading %s to TestPyPI...\n" "$NEW_VERSION"
+        printf "%s\n" "=================================================="
 
         if python -m twine upload --repository testpypi "dist/rtl_aid-${NEW_VERSION}."*; then
             print_success "TestPyPI upload successful!"
-            echo "View at: https://test.pypi.org/project/rtl-aid/$NEW_VERSION/"
+            printf "View at: https://test.pypi.org/project/rtl-aid/%s/\n" "$NEW_VERSION"
         else
             print_error "TestPyPI upload failed"
             exit 1
@@ -202,14 +230,14 @@ main() {
 
     if ask_yes_no "Upload to PyPI (production)?"; then
         echo
-        print_warning "This will make $NEW_VERSION publicly available!"
+        printf "${YELLOW}This will make %s publicly available!${NC}\n" "$NEW_VERSION"
         if ask_yes_no "Are you absolutely sure?"; then
-            echo "Uploading $NEW_VERSION to PyPI..."
-            echo "=================================================="
+            printf "Uploading %s to PyPI...\n" "$NEW_VERSION"
+            printf "%s\n" "=================================================="
 
             if python -m twine upload "dist/rtl_aid-${NEW_VERSION}."*; then
                 print_success "PyPI upload successful!"
-                echo "View at: https://pypi.org/project/rtl-aid/$NEW_VERSION/"
+                printf "View at: https://pypi.org/project/rtl-aid/%s/\n" "$NEW_VERSION"
             else
                 print_error "PyPI upload failed"
                 exit 1
@@ -224,7 +252,7 @@ main() {
 
     # Final summary
     print_header "Release Complete!"
-    echo "Version $NEW_VERSION has been successfully released"
+    printf "Version %s has been successfully released\n" "$NEW_VERSION"
     echo
     echo "Next steps:"
     echo "  1. Create a git tag: git tag -a v$NEW_VERSION -m 'Release v$NEW_VERSION'"
@@ -232,7 +260,7 @@ main() {
     echo "  3. Create a GitHub release with changelog"
     echo
     echo "Users can now install with:"
-    echo "  pip install rtl-aid==$NEW_VERSION"
+    printf "  pip install rtl-aid==%s\n" "$NEW_VERSION"
 }
 
 # Run main
