@@ -1,5 +1,31 @@
 # ToDos:
 
+- [X] **BUG: Port width ranges with spaces are truncated (v0.2.3 regression - FIXED)**
+	**Severity:** High — generates incomplete port documentation
+	**Issue:** Port width specifications with spaces around colons (e.g., `[15 : 0]` instead of `[15:0]`) were incompletely parsed, capturing only the opening bracket and first token.
+	**Root Cause (Fixed):** In `core.py:extract_module_and_ports()`:
+	1. Line 159: `tokens = p.split()` splits on whitespace, breaking `[15 : 0]` into separate tokens
+	2. Old code (line 176-177): Width extraction only checked `if t.startswith("[")`, capturing only first token `[15`
+	3. Remaining tokens (`:`, `0]`) were lost, resulting in truncated width
+	
+	**Solution Implemented:**
+	- Added state machine to collect ALL tokens between `[` and `]`
+	- Handles both single-token `[7:0]` and multi-token `[15 : 0]` ranges
+	- Preserves spacing by joining tokens: `" ".join(width_tokens)`
+	- Works with parameter expressions: `[PARAM-1 : 0]`, `[PARAM_A : PARAM_B]`
+	
+	**Verification:**
+	- ✅ 7 new tests all passing (including edge cases)
+	- ✅ All 242 existing tests still pass (no regressions)
+	- ✅ Real-world test on ble_ll.v: axi_awprot [2 : 0] now correctly parsed
+	- ✅ Real-world test on ble_ll.v: axi_awaddr [C_S00_AXI_ADDR_WIDTH-1 : 0] now correctly parsed
+	
+	**Test Cases:** `tests/core/fixtures/port_widths_with_spaces.v`:
+	- ✅ `[7:0]` (single token, works)
+	- ✅ `[15 : 0]` (fixed — now captures full range with spaces)
+	- ✅ `[C_WIDTH-1 : 0]` (fixed — parameter expressions preserved)
+	- ✅ `[PARAM_A-1 : PARAM_B]` (fixed — complex expressions work)
+
 - [X] **BUG: Backtick attribute handling breaks port parsing (v0.2.2 regression)**
 	**Severity:** High — generates corrupted module documentation
 	**Issue:** Lines with Verilog backtick-prefixed attributes (e.g., `KEEP_FOR_DBG) are incorrectly parsed during port extraction.

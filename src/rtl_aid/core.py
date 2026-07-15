@@ -172,9 +172,23 @@ class VerilogWikiParser(object):
 
             width = ""
             custom_type = ""
+            width_tokens = []
+            in_width = False
+
             for t in type_tokens:
                 if t.startswith("["):
-                    width = t
+                    in_width = True
+                    width_tokens = [t]
+                    if t.endswith("]"):
+                        width = " ".join(width_tokens)
+                        width_tokens = []
+                        in_width = False
+                elif in_width:
+                    width_tokens.append(t)
+                    if t.endswith("]"):
+                        width = " ".join(width_tokens)
+                        width_tokens = []
+                        in_width = False
                 elif t not in _BASE_TYPES:
                     custom_type = t
 

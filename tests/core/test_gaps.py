@@ -235,6 +235,67 @@ class TestAttributeVariantsHandled(unittest.TestCase):
             f"Expected 4 outputs, got {len(self.mod['outputs'])}: {self.mod['outputs']}")
 
 
+class TestPortWidthsWithSpaces(unittest.TestCase):
+    """v0.2.3 regression: Port width specifications with spaces around colons
+    (e.g., [15 : 0] instead of [15:0]) are incompletely parsed.
+
+    Root cause: The tokenizer uses split() which breaks [15 : 0] into three tokens:
+    [15, :, 0]. The width extraction only checks if token.startswith("["), capturing
+    only [15 and losing : 0.
+
+    Impact:
+    - Truncated width specifications: [15:0] → [15
+    - Parameter expressions lost: [PARAM-1 : 0] → [PARAM-1
+    - Breaks documentation for stylized Verilog (common in enterprise codebases)
+
+    See: examples/issues/ble_ll.v lines 85, 111, 112 (bram_addr_b, axi_awaddr, axi_awprot)
+    """
+
+    def setUp(self):
+        parser = VerilogWikiParser([f"{CORE_FIXTURES}/port_widths_with_spaces.v"])
+        parser.scan()
+        self.mod = parser.modules["port_width_spaces"]
+
+    def test_width_without_spaces_works(self):
+        """Standard format [7:0] should parse correctly."""
+        self.assertIn("data_no_spaces [7:0]", self.mod["inputs"])
+
+    def test_width_with_spaces_fully_captured(self):
+        """Format [15 : 0] with spaces should capture full range."""
+        self.assertIn("data_with_spaces [15 : 0]", self.mod["inputs"],
+            f"Expected full width [15 : 0], got: {self.mod['inputs']}")
+
+    def test_parameter_width_with_spaces(self):
+        """Parameter in width [PARAM-1 : 0] should be fully captured."""
+        self.assertIn("param_width_with_spaces [C_WIDTH-1 : 0]", self.mod["inputs"],
+            f"Expected [C_WIDTH-1 : 0], got: {self.mod['inputs']}")
+
+    def test_address_width_with_spaces(self):
+        """Address port width with spaces should be complete."""
+        self.assertIn("addr_with_spaces [ADDR_WIDTH-1 : 0]", self.mod["inputs"],
+            f"Expected full width, got: {self.mod['inputs']}")
+
+    def test_output_width_with_spaces(self):
+        """Output port width with spaces should be fully extracted."""
+        self.assertIn("result_spaces [7 : 0]", self.mod["outputs"],
+            f"Expected [7 : 0], got: {self.mod['outputs']}")
+
+    def test_signed_port_width_with_spaces(self):
+        """Signed port with spaced width should be complete."""
+        self.assertIn("signed_with_spaces [15 : 0]", self.mod["outputs"],
+            f"Expected [15 : 0], got: {self.mod['outputs']}")
+
+    def test_no_truncated_brackets(self):
+        """No port should have truncated bracket ranges like [15 or [PARAM-1."""
+        all_ports = self.mod["inputs"] + self.mod["outputs"]
+        for port in all_ports:
+            # Should not end with unclosed bracket
+            self.assertFalse(port.rstrip().endswith("[") or
+                           port.rstrip().endswith("[C") or
+                           port.rstrip().endswith("-1"),
+                f"Port has truncated width: {port}")
+
+
 class TestShuffledPortOrdering(unittest.TestCase):
     """Verify the parser correctly handles ports when inputs and outputs
     are interleaved/shuffled in the port list, not grouped together.
