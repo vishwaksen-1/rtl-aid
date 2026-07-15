@@ -96,6 +96,13 @@ class VerilogWikiParser(object):
         ).strip()
         return param_str
 
+    def _strip_verilog_attributes(self, port_block):
+        """Remove Verilog attributes like (*mark_debug="true",DONT_TOUCH="TRUE"*)
+        from the port block to prevent comma-containing attributes from breaking
+        the port splitting logic.
+        """
+        return re.sub(r"\(\*[^*]*\*\)\s*", "", port_block)
+
     # -------------------------
     # PARSING
     # -------------------------
@@ -108,6 +115,7 @@ class VerilogWikiParser(object):
         mod_name = m.group(1)
         param_block = m.group(3) or ""
         port_block = m.group(4)
+        port_block = self._strip_verilog_attributes(port_block)
 
         inputs, outputs, inouts = [], [], []
         parameters = []
