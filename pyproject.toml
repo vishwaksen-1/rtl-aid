@@ -29,3 +29,6 @@ rtllint = "rtl_aid.lint:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+rtl_aid = ["templates/**"]

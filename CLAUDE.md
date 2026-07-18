@@ -1,24 +1,19 @@
 # Project: Veridoc (rtl-aid)
 
-**Purpose:** CI-native documentation generator for Verilog/RTL codebases. Auto-generates markdown module docs and dependency graphs from SystemVerilog source.
-
-**Team:** FPGA/ASIC engineers. Solves: stale docs, poor module visibility, painful onboarding.
+**Purpose:** CI-native documentation generator for Verilog/RTL codebases. Auto-generates markdown module docs + dependency graphs. Wraps verilator linting + adds custom checks.
 
 ## Project Structure
 
 ```
-veridoc/
-├── src/rtl_aid/                    # Main package
-│   ├── cli.py                      # CLI entry points (rtldoc, rtllint)
-│   ├── core.py                     # VerilogWikiParser: parse → scan → generate
-│   └── lint.py                     # Linting: verilator integration + custom checks
-├── tests/                          # Test suite (181 tests)
-│   ├── core/                       # Core feature tests (43)
-│   ├── lint/                       # Lint feature tests (129)
-│   └── integration/                # E2E integration tests (9)
-├── TESTING.md                      # How testing works
-├── CLAUDE.md                       # This file
-└── TODO.md                         # Feature backlog
+src/rtl_aid/
+├── cli.py          # CLI: rtldoc, rtllint entry points
+├── core.py         # VerilogWikiParser (scan, generate_markdown, write_json, export_dot)
+└── lint.py         # Verilator wrapper + custom checks (sensitivity, unlabeled generate)
+
+tests/              # 235 tests organized by feature
+├── core/           # Module parsing, markdown gen, JSON graph
+├── lint/           # Verilator output parsing, file tagging, custom checks
+└── integration/    # E2E workflows
 ```
 
 ## Key Modules
@@ -36,8 +31,12 @@ The heart of rtldoc. Single class:
    - Tracks changes (added/removed ports) for verbose logging
 3. `write_json()` — Export dependency graph as JSON
    - Only runs if `--json-graph` flag
-   - Writes to `json_graph_dir` (or output dir if unset)
-4. `run_ci_checks()` — Validate module structure
+   - Writes to `json_graph_file` path (or output_dir/graph.json if unset)
+   - Creates parent directories automatically
+4. `export_dot()` — Export dependency graph as Graphviz DOT
+   - Called via `--export-dot FILE` flag
+   - Can run standalone: read existing graph.json, output DOT (no scanning)
+5. `run_ci_checks()` — Validate module structure
    - Each module must have inputs/outputs (no IO = error)
    - No self-instantiation allowed
 
@@ -66,24 +65,6 @@ Wraps verilator for linting; adds checks verilator's `-Wall` misses.
   - Updates if already present (no duplication)
   - Tags each warned line with `/* Check[ID]: message */`
 
-## Recent Changes (This Session)
-
-### Feature 1: rtldoc `--json-graph-dir`
-- **What:** Optional flag to specify custom directory for `graph.json` output
-- **Where:** `cli.py` (argparse), `core.py` (VerilogWikiParser, write_json)
-- **Behavior:** 
-  - Default (no flag): writes to output directory
-  - With flag: writes to specified directory
-  - Empty string or None: falls back to output directory
-  - Dry-run: identifies directory but doesn't create it
-
-### Feature 2: rtllint Command Tagging
-- **What:** Tag files with rtllint command instead of verilator in headers
-- **Where:** `lint.py` (tag_file, main)
-- **Behavior:**
-  - Format: `// lint-test: rtllint -I<dir1> -I<dir2> ... <filepath>`
-  - Idempotent: re-running updates the command, doesn't duplicate
-  - Updates only: existing lint-test line + replaces old command
 
 ## Code Style & Conventions
 
@@ -92,6 +73,7 @@ Wraps verilator for linting; adds checks verilator's `-Wall` misses.
 - **Error handling:** Only at system boundaries (user input, file I/O, external tools)
 - **Regexes:** Patterns are named constants at module level for readability
 - **Fixtures:** Test data stored in `tests/*/fixtures/`, copied before mutation via `copy_fixture()`
+- **Testing:** Always use project test infrastructure (fixtures in `tests/*/fixtures/`); do NOT create ad-hoc temp files or test files outside the test suite. If fixtures are inadequate, add to the project's test data instead.
 
 ## How Things Work
 
@@ -125,7 +107,7 @@ Uses regex (no full parser — intentional for simplicity):
 - Integration tests: cross-module E2E verification
 - Fixtures: immutable test data, copied before each test
 
-**Run:** `python -m unittest discover -s tests -p 'test_*.py'` (181 tests)
+**Run:** `python -m unittest discover -s tests -p 'test_*.py'` (235 tests)
 
 ## Debugging
 
@@ -149,19 +131,12 @@ Check:
 
 See `test_gaps.py` for examples.
 
-## Future Improvements (from TODO.md)
-
-- Multi-file `include` resolution
-- SystemVerilog interface/modport extraction
-- Formal property checking integration
-- Cross-repo module dependencies
-- Interactive dependency graph visualization
-
 ---
 
 **Last updated:** July 2026  
-**Tests:** 181 passing (43 core, 129 lint, 9 integration)  
-**Key files to modify:**
-- Features on rtldoc: `src/rtl_aid/cli.py`, `src/rtl_aid/core.py`
-- Features on rtllint: `src/rtl_aid/lint.py`
-- Tests: `tests/{core,lint,integration}/test_*.py`
+**Tests:** 235 passing (73 core, 47 lint, 15 integration)
+
+**Key files:**
+- Core features: `src/rtl_aid/cli.py`, `src/rtl_aid/core.py`
+- Linting: `src/rtl_aid/lint.py`
+- Tests: See `docs/tests/TEST_COVERAGE.md` for quick lookup

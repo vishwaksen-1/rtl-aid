@@ -101,6 +101,8 @@ def test_custom_dir_writes_only_to_custom(self):
 
 ## Adding New Tests
 
+**Before writing a new test, check [`docs/tests/TEST_COVERAGE.md`](../docs/TEST_COVERAGE.md)** to see if the feature is already covered. This prevents duplicate test work and guides placement of new tests.
+
 1. **Unit test:** Add to appropriate `tests/core/test_*.py` or `tests/lint/test_*.py`
 2. **Integration test:** Add to `tests/integration/test_features_e2e.py`
 3. **With fixtures:** Create fixture file in `core/fixtures/` or `lint/fixtures/`, use `copy_fixture()`

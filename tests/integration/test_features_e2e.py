@@ -9,8 +9,8 @@ from rtl_aid.core import VerilogWikiParser
 from rtl_aid.lint import tag_file
 
 
-class TestJsonGraphDirFeatureE2E(unittest.TestCase):
-    """End-to-end tests for the --json-graph-dir feature."""
+class TestJsonGraphFileFeatureE2E(unittest.TestCase):
+    """End-to-end tests for the --json-graph-file feature."""
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -28,12 +28,12 @@ endmodule
         self.tmpdir.cleanup()
 
     def test_default_writes_to_output_dir(self):
-        """Without --json-graph-dir, graph.json goes to output directory."""
+        """Without --json-graph-file, graph.json goes to output directory."""
         out_dir = os.path.join(self.tmpdir.name, "docs")
         parser = VerilogWikiParser(
             [self.test_file],
             json_graph=True,
-            json_graph_dir=None
+            json_graph_file=None
         )
         parser.scan()
         parser.write_json(out_dir)
@@ -44,52 +44,50 @@ endmodule
             data = json.load(f)
         self.assertIsInstance(data, dict)
 
-    def test_custom_dir_writes_only_to_custom(self):
-        """With --json-graph-dir, graph.json goes only to custom directory."""
+    def test_custom_file_writes_to_specified_file(self):
+        """With --json-graph-file, graph.json goes to the specified file."""
         out_dir = os.path.join(self.tmpdir.name, "docs")
-        graph_dir = os.path.join(self.tmpdir.name, "graphs")
+        graph_file = os.path.join(self.tmpdir.name, "custom_graph.json")
 
         parser = VerilogWikiParser(
             [self.test_file],
             json_graph=True,
-            json_graph_dir=graph_dir
+            json_graph_file=graph_file
         )
         parser.scan()
         parser.write_json(out_dir)
 
-        # Should be in custom dir
-        custom_graph = os.path.join(graph_dir, "graph.json")
-        self.assertTrue(os.path.exists(custom_graph))
+        # Should be at custom file path
+        self.assertTrue(os.path.exists(graph_file))
 
         # Should NOT be in output dir
         out_graph = os.path.join(out_dir, "graph.json")
         self.assertFalse(os.path.exists(out_graph))
 
-    def test_custom_dir_creates_nested_dirs(self):
-        """--json-graph-dir should create nested directories if needed."""
+    def test_custom_file_creates_parent_dirs(self):
+        """--json-graph-file should create parent directories if needed."""
         out_dir = os.path.join(self.tmpdir.name, "docs")
-        graph_dir = os.path.join(self.tmpdir.name, "a", "b", "c", "graphs")
+        graph_file = os.path.join(self.tmpdir.name, "a", "b", "c", "graph.json")
 
         parser = VerilogWikiParser(
             [self.test_file],
             json_graph=True,
-            json_graph_dir=graph_dir
+            json_graph_file=graph_file
         )
         parser.scan()
         parser.write_json(out_dir)
 
-        graph_file = os.path.join(graph_dir, "graph.json")
         self.assertTrue(os.path.exists(graph_file))
 
     def test_dry_run_creates_no_files(self):
         """In dry-run mode, graph.json should not be written."""
         out_dir = os.path.join(self.tmpdir.name, "docs")
-        graph_dir = os.path.join(self.tmpdir.name, "graphs")
+        graph_file = os.path.join(self.tmpdir.name, "graph.json")
 
         parser = VerilogWikiParser(
             [self.test_file],
             json_graph=True,
-            json_graph_dir=graph_dir,
+            json_graph_file=graph_file,
             dry_run=True
         )
         parser.scan()
@@ -97,7 +95,7 @@ endmodule
 
         # Neither should exist
         self.assertFalse(os.path.exists(os.path.join(out_dir, "graph.json")))
-        self.assertFalse(os.path.exists(os.path.join(graph_dir, "graph.json")))
+        self.assertFalse(os.path.exists(graph_file))
 
 
 class TestRtllintCommandTaggingFeatureE2E(unittest.TestCase):
@@ -187,6 +185,80 @@ endmodule
         # Line 7 should have the warning comment
         # (accounting for 2 header lines inserted at the top)
         self.assertIn("/* Check[UNUSEDSIGNAL]:", lines[8])
+
+
+class TestTier1ComprehensiveE2E(unittest.TestCase):
+    """End-to-end test exercising all Tier 1 features together."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.TemporaryDirectory()
+
+        top_file = os.path.join(self.tmpdir.name, "top_module.v")
+        with open(top_file, "w") as f:
+            f.write("""module top_module(
+    input clk,
+    output reg data
+);
+    sub_module1 sub1(.clk(clk), .data(data));
+    sub_module2 sub2(.clk(clk));
+endmodule
+""")
+
+        sub1_file = os.path.join(self.tmpdir.name, "sub_module1.v")
+        with open(sub1_file, "w") as f:
+            f.write("""module sub_module1(
+    input clk,
+    output reg data
+);
+endmodule
+""")
+
+        sub2_file = os.path.join(self.tmpdir.name, "sub_module2.v")
+        with open(sub2_file, "w") as f:
+            f.write("""module sub_module2(
+    input clk
+);
+endmodule
+""")
+
+        self.files = [top_file, sub1_file, sub2_file]
+
+    def tearDown(self):
+        self.tmpdir.cleanup()
+
+    def test_tier1_workflow(self):
+        """All three Tier 1 features working together."""
+        out_dir = os.path.join(self.tmpdir.name, "docs")
+        graph_file = os.path.join(self.tmpdir.name, "dependency.json")
+        dot_file = os.path.join(self.tmpdir.name, "dependency.dot")
+
+        parser = VerilogWikiParser(
+            self.files,
+            json_graph=True,
+            json_graph_file=graph_file,
+        )
+        parser.scan()
+        parser.write_json(out_dir)
+
+        self.assertTrue(os.path.exists(graph_file), "graph.json file created")
+
+        parser.export_dot(dot_file)
+
+        self.assertTrue(os.path.exists(dot_file), "DOT file created")
+
+        with open(dot_file) as f:
+            dot_content = f.read()
+
+        self.assertIn("digraph", dot_content)
+        self.assertIn("top_module", dot_content)
+        self.assertIn("sub_module1", dot_content)
+        self.assertIn("sub_module2", dot_content)
+
+        with open(graph_file) as f:
+            graph = json.load(f)
+
+        self.assertIn("top_module", graph)
+        self.assertEqual(graph["top_module"]["calls"], ["sub_module1", "sub_module2"])
 
 
 if __name__ == "__main__":

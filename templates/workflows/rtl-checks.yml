@@ -1,0 +1,42 @@
+name: RTL Checks
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  rtldoc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install rtl-aid
+        run: pip install rtl-aid
+      - name: Generate RTL documentation
+        run: rtldoc -d . -o docs/modules --ci --json-graph
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: rtl-docs
+          path: docs/
+
+  rtllint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Install rtl-aid
+        run: pip install rtl-aid
+      - name: Install verilator
+        run: sudo apt-get update && sudo apt-get install -y verilator
+      - name: Run rtllint
+        run: |
+          find . -name "*.v" -o -name "*.sv" | \
+          xargs rtllint --dry-run

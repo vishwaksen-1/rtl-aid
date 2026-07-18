@@ -52,7 +52,7 @@ def _eval_ast_node(node):
 
 
 class VerilogWikiParser(object):
-    def __init__(self, paths, verbose=0, ci=False, json_graph=False, json_graph_dir=None, print_errors=False, exclude=None, dry_run=False):
+    def __init__(self, paths, verbose=0, ci=False, json_graph=False, json_graph_file=None, print_errors=False, exclude=None, dry_run=False):
         self.paths = paths
         self.modules = {}
         self.called_by = {}
@@ -60,7 +60,7 @@ class VerilogWikiParser(object):
         self.verbose = verbose
         self.ci = ci
         self.json_graph = json_graph
-        self.json_graph_dir = json_graph_dir
+        self.json_graph_file = json_graph_file
         self.print_errors = print_errors
         self.exclude = exclude or []
         self.issues = []
@@ -459,13 +459,62 @@ class VerilogWikiParser(object):
                 "called_by": self.called_by.get(m, [])
             }
 
-        graph_dir = self.json_graph_dir if self.json_graph_dir else out_dir
-        if not self.dry_run:
-            os.makedirs(graph_dir, exist_ok=True)
-        path = os.path.join(graph_dir, "graph.json")
+        # Determine output path: use json_graph_file if set, else create graph.json in out_dir
+        if self.json_graph_file:
+            path = self.json_graph_file.rstrip("/")
+            graph_dir = os.path.dirname(path)
+            if graph_dir and not self.dry_run:
+                os.makedirs(graph_dir, exist_ok=True)
+        else:
+            path = os.path.join(out_dir, "graph.json")
+            if not self.dry_run:
+                os.makedirs(out_dir, exist_ok=True)
+
         if not self.dry_run:
             with open(path, "w") as f:
                 json.dump(graph, f, indent=2)
+
+    def _graph_to_dot(self, graph):
+        """Convert a dependency graph dict to Graphviz DOT format."""
+        lines = ["digraph {", '  rankdir=LR;', '  node [shape=box];']
+        for module, deps in sorted(graph.items()):
+            lines.append(f'  "{module}";')
+        for module, deps in sorted(graph.items()):
+            for called in sorted(deps.get("calls", [])):
+                lines.append(f'  "{module}" -> "{called}";')
+        lines.append("}")
+        return "\n".join(lines)
+
+    def export_dot(self, out_file):
+        """Export current module graph to Graphviz DOT format."""
+        graph = {}
+        for m, d in self.modules.items():
+            graph[m] = {
+                "calls": d["calls"],
+                "called_by": self.called_by.get(m, [])
+            }
+        dot_content = self._graph_to_dot(graph)
+        if not self.dry_run:
+            with open(out_file, "w") as f:
+                f.write(dot_content)
+
+    def export_dot_from_file(self, json_file, dot_file):
+        """Load a graph.json file and export it to Graphviz DOT format."""
+        try:
+            with open(json_file, "r") as f:
+                graph = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: {json_file} not found", file=sys.stderr)
+            sys.exit(1)
+        except json.JSONDecodeError:
+            print(f"Error: {json_file} is not valid JSON", file=sys.stderr)
+            sys.exit(1)
+
+        dot_content = self._graph_to_dot(graph)
+        if not self.dry_run:
+            with open(dot_file, "w") as f:
+                f.write(dot_content)
+        print(f"Exported graph to {dot_file}")
 
     # -------------------------
     # CI VALIDATION

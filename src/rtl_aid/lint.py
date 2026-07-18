@@ -7,6 +7,12 @@ import shutil
 from . import __version__
 
 
+LINT_RULES = {
+    "SENSINCOMPLETE": "Signal(s) read but missing from sensitivity list in always @(...) block",
+    "GENUNNAMED": "generate block contains an unlabeled 'begin' (missing ': label')",
+}
+
+
 def _get_verilator_version():
     try:
         out = subprocess.check_output(["verilator", "--version"], text=True)
@@ -81,6 +87,15 @@ def parse_lint_output(output, filepath):
 
     return issues
 
+
+# ===== CUSTOM CHECKS (beyond verilator -Wall) =====
+# These checks catch issues that verilator's -Wall misses.
+# Each check_*() function returns {line_num: (rule_id, message)}.
+# When adding a new check:
+#   1. Add function check_<rulename>()
+#   2. Add entry to LINT_RULES dict at top
+#   3. Call it in main() custom checks section
+#   4. Add tests to tests/lint/
 
 def _strip_comments(text):
     """Blank out comment content while preserving line numbers, so English
@@ -235,8 +250,13 @@ def main():
         version=f"%(prog)s {__version__}"
     )
     parser.add_argument(
+        "--list-rules",
+        action="store_true",
+        help="List all available lint rules and exit"
+    )
+    parser.add_argument(
         "file",
-        nargs="+",
+        nargs="*",
         metavar="FILE",
         help="Verilog/SystemVerilog file(s) to lint"
     )
@@ -259,6 +279,21 @@ def main():
         help="Print full verilator output"
     )
     args = parser.parse_args()
+
+    if args.list_rules:
+        print("rtllint custom rules:")
+        print()
+        for rule_id, description in sorted(LINT_RULES.items()):
+            print(f"  {rule_id:<20} {description}")
+        print()
+        print("For verilator's built-in rule IDs, see:")
+        print("  verilator --lint-only -Wall <file>")
+        print("or:")
+        print("  https://verilator.org/guide/latest/warnings.html")
+        sys.exit(0)
+
+    if not args.file:
+        parser.error("file: required unless --list-rules is used")
 
     _check_verilator()
 
