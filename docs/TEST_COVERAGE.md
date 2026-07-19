@@ -1,10 +1,10 @@
 # Test Coverage Reference
 
-Quick lookup guide showing which tests cover which features. Total: **239 tests** across 4 directories (116 core + 43 lint + 70 config + 10 integration).
+Quick lookup guide showing which tests cover which features. Total: **254 tests** across 4 directories (121 core + 43 lint + 80 config + 10 integration).
 
 ---
 
-## Core Features (`tests/core/`) — 116 tests
+## Core Features (`tests/core/`) — 121 tests
 
 ### `test_parsing.py` — 2 tests
 **Port/parameter parsing and module dependency extraction**
@@ -14,9 +14,9 @@ Quick lookup guide showing which tests cover which features. Total: **239 tests*
 **CI validation and JSON graph export**
 - `TestCiValidation`: Module validation (empty IO, self-instantiation), graph.json generation
 
-### `test_markdown.py` — 1 test
-**Markdown generation and idempotency**
-- `TestMarkdownGenerationAndLogging`: File generation, change detection, idempotent runs
+### `test_markdown.py` — 4 tests
+**Markdown generation, idempotency, and output handling**
+- `TestMarkdownGenerationAndLogging`: File generation, change detection, idempotent runs, nested directory creation, dry-run mode, large port lists (50+)
 
 ### `test_gaps.py` — 46 tests
 **Regression suite: port width, parameters, attributes, and edge cases**
@@ -36,9 +36,9 @@ Quick lookup guide showing which tests cover which features. Total: **239 tests*
 - `TestJsonGraphFileDryRun` (2): Dry-run mode (no file writes)
 - `TestJsonGraphFileEdgeCases` (5): Empty graphs, absolute paths, structure preservation
 
-### `test_export_dot.py` — 8 tests
+### `test_export_dot.py` — 11 tests
 **Graphviz DOT export for dependency graphs**
-- `TestExportDot` (8): File creation, Graphviz syntax, node/edge inclusion, JSON→DOT conversion
+- `TestExportDot` (11): File creation, Graphviz syntax, node/edge inclusion, JSON→DOT conversion, nested directory creation, circular dependency handling (A→B→A)
 
 ### `test_builtin_functions.py` — 39 tests (Tier 2)
 **SystemVerilog built-in function evaluation and configuration**
@@ -89,7 +89,7 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 
 ---
 
-## Config Features (`tests/config/`) — 70 tests (Tier 2)
+## Config Features (`tests/config/`) — 80 tests (Tier 2)
 
 ### `test_config_discovery.py` — 8 tests
 **Config file discovery and upward search**
@@ -111,14 +111,20 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 - `TestInitWorkflowConfigContent` (5): Has rtldoc/rtllint sections, documentation comments, shows common options
 - `TestInitWorkflowErrorHandling` (2): Permission errors, unwritable directory
 
-### `test_config_integration.py` — ~14 tests
+### `test_config_integration.py` — 14 tests
 **End-to-end config feature integration**
 - `TestRtldocWithConfigFile` (4): Reads config from current dir, CLI override, --config flag, all options processed
 - `TestRtllintWithConfigFile` (3): Reads config, CLI override, all options processed
 - `TestConfigSearchUpward` (3): Deep subdirectory search, prefer nearest, stop at first
 - `TestConfigErrorHandling` (3): Malformed YAML errors, invalid types, missing --config errors
 
-### `test_functions_config.py` — 5 tests (NEW)
+### `test_cli_edge_cases.py` — 10 tests (NEW)
+**CLI and config edge cases discovered during real-world testing**
+- `TestDotExportCLI` (4): Nested output paths (parent dir creation), absolute paths, JSON→DOT graph-only mode
+- `TestConfigWithSpecialPaths` (3): Paths with spaces, relative output dir resolution, absolute paths unchanged
+- `TestConfigMergingPrecedence` (4): CLI dir/out overrides config, config used without CLI args, merged behavior
+
+### `test_functions_config.py` — 5 tests
 **Custom functions configuration integration**
 - `TestFunctionsConfigInTemplate` (1): Template includes commented functions_config option
 - `TestFunctionsConfigLoading` (4): Config file supports functions_config, passed to parser, optional behavior, custom functions merged with packaged
@@ -157,7 +163,9 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 | **Parameters** | `core/test_gaps.py` | `TestParameterExpressionResolution`, `TestLocalparamDistinction` |
 | **JSON graph export** | `core/test_ci.py`, `core/test_json_graph_dir.py` | `TestCiValidation`, `TestJsonGraphDefaultBehavior`, `TestJsonGraphFileParameter` |
 | **DOT/Graphviz export** | `core/test_export_dot.py` | `TestExportDot` |
+| **DOT export edge cases** | `core/test_export_dot.py` | `TestExportDot` (nested dirs, circular deps) |
 | **Markdown generation** | `core/test_markdown.py` | `TestMarkdownGenerationAndLogging` |
+| **Markdown output handling** | `core/test_markdown.py` | `TestMarkdownGenerationAndLogging` (nested dirs, dry-run, large ports) |
 | **Verilator linting** | `lint/test_parse_output.py`, `lint/test_verilator_integration.py` | `TestParseLintOutput`, `TestIncludeDirEndToEnd` |
 | **File tagging** | `lint/test_tag_file.py`, `lint/test_rtllint_command_tagging.py` | `TestTagFile`, `TestRtllintCommandInHeader`, `TestRtllintCommandIdempotency` |
 | **Include directories** | `lint/test_include_dirs.py`, `lint/test_verilator_integration.py` | `TestRunLintIncludeDirs`, `TestIncludeDirEndToEnd` |
@@ -169,6 +177,9 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 | **CLI vs config precedence** | `config/test_config_precedence.py` | `TestConfigPrecedence` |
 | **--init-workflow config generation** | `config/test_init_workflow_config.py` | `TestInitWorkflowGeneratesConfig`, `TestInitWorkflowConfigContent`, `TestInitWorkflowErrorHandling` |
 | **Config integration** | `config/test_config_integration.py` | `TestRtldocWithConfigFile`, `TestRtllintWithConfigFile`, `TestConfigSearchUpward`, `TestConfigErrorHandling` |
+| **CLI edge cases** | `config/test_cli_edge_cases.py` | `TestDotExportCLI`, `TestConfigWithSpecialPaths`, `TestConfigMergingPrecedence` |
+| **Nested output paths** | `config/test_cli_edge_cases.py` | `TestDotExportCLI` (parent dir creation) |
+| **Special characters in paths** | `config/test_cli_edge_cases.py` | `TestConfigWithSpecialPaths` (spaces, mixed absolute/relative) |
 | **Built-in functions** | `core/test_builtin_functions.py` | `TestFunctionEvaluation`, `TestFunctionMarkdownOutput`, `TestFunctionEdgeCases` |
 | **Built-in function config** | `core/test_builtin_functions.py`, `config/test_functions_config.py` | `TestFunctionsConfigLoading`, `TestMalformedConfigFallback`, `TestFunctionsConfigInTemplate`, `TestFunctionsConfigLoading` |
 | **Custom functions in config** | `config/test_functions_config.py` | `TestFunctionsConfigLoading` |
@@ -181,12 +192,13 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 
 - **Entry shims:** `tests/test_core.py`, `tests/test_lint.py`, and `tests/test_config.py` are import shims that consolidate all real tests for unified discovery via `python -m unittest`.
 - **Fixtures:** Test data stored in `tests/core/fixtures/`, `tests/lint/fixtures/`, and `tests/config/fixtures/`, copied before mutation (non-destructive).
-- **Run all:** `python -m unittest discover -s tests -p 'test_*.py'` (239 tests; avoid root `discover` as it duplicates via import shims)
+- **Run all:** `python -m unittest discover -s tests -p 'test_*.py'` (254 tests; avoid root `discover` as it duplicates via import shims)
 - **Run by feature:** 
-  - `python -m unittest discover -s tests/core -p 'test_*.py'` (116 tests)
+  - `python -m unittest discover -s tests/core -p 'test_*.py'` (121 tests)
   - `python -m unittest discover -s tests/lint -p 'test_*.py'` (43 tests)
-  - `python -m unittest discover -s tests/config -p 'test_*.py'` (70 tests, includes 5 new functions_config)
+  - `python -m unittest discover -s tests/config -p 'test_*.py'` (80 tests, includes 5 functions_config + 10 cli_edge_cases)
   - `python -m unittest discover -s tests/integration -p 'test_*.py'` (10 tests)
 - **Skip integration tests:** Add `@unittest.skipUnless` for features requiring external tools (e.g., verilator).
 - **Regression suite:** `tests/core/test_gaps.py` documents known parsing edge cases and v0.2.2/v0.2.3 fixes.
+- **New (v0.2.8):** Edge case tests in `tests/config/test_cli_edge_cases.py` + enhancements to `tests/core/test_markdown.py` and `tests/core/test_export_dot.py`; discovered and fixed DOT export parent directory creation bug.
 - **New (v0.3.0):** Functions config integration tests in `tests/config/test_functions_config.py`; custom functions.yaml files via config option.

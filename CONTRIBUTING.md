@@ -28,38 +28,12 @@ brew install verilator
 
 ## Project structure
 
-```
-src/rtl_aid/
-  core.py       VerilogWikiParser — parse, scan, generate docs
-  cli.py        rtldoc CLI entry point
-  lint.py       rtllint CLI entry point
-  __init__.py
+See [`CLAUDE.md`](CLAUDE.md) for the full module/test layout and how the pieces fit together. Quick orientation:
 
-tests/
-  test_core.py  Thin entry point — re-exports everything from tests/core/
-  test_lint.py  Thin entry point — re-exports everything from tests/lint/
-  support.py    Shared fixture-loading helpers
-  core/
-    fixtures/         .v/.sv fixture files used by core tests
-    test_parsing.py   Port/parameter/dependency extraction
-    test_ci.py        --ci checks, --json-graph
-    test_markdown.py  Doc generation, idempotency
-    test_gaps.py       Known-gap regression tests (see "TDD gap tests" below)
-  lint/
-    fixtures/                     .v fixture files used by lint tests
-    test_parse_output.py         verilator-output parsing
-    test_tag_file.py             inline tagging / header insertion
-    test_include_dirs.py         -I flag command construction (mocked subprocess)
-    test_gaps.py                  Known-gap regression tests
-    test_verilator_integration.py Real-verilator end-to-end checks (skipped if verilator absent)
-
-docs/
-  specs.md      Formal specification
-  graph_schema.json  JSON schema for --json-graph output
-
-examples/
-  USB4-project/ Real-world Verilog/SV example project
-```
+- `src/rtl_aid/` — `core.py` (doc/graph generation), `lint.py` (rtllint), `cli.py` (entry points + config merge), `config/` (`.rtl-aidrc.yml` handling), `functions.py`/`sv_builtin_functions.py` (SV built-in function resolution), `templates/` (`--init-workflow` scaffolding)
+- `tests/` — `core/`, `lint/`, `config/`, `integration/`, mirroring the modules above; see `TESTING.md` for how to run them
+- `docs/graph_schema.json` — JSON schema for `--json-graph` output
+- `examples/USB4-project/` — real-world Verilog/SV example project
 
 ---
 
@@ -79,13 +53,13 @@ RTL source used by a test belongs in that suite's `fixtures/` directory as a rea
 
 ### TDD gap tests
 
-`tests/core/test_gaps.py` and `tests/lint/test_gaps.py` hold tests written *before* their corresponding fix, asserting the correct/desired behavior (not the current one) for known gaps tracked in `TODO.md`. When one of these was red and is now green, the fix has landed — see `TODO.md` and `checklist.md` for the current status of each. New known gaps should get a test here first, red, before the fix.
+`tests/core/test_gaps.py` and `tests/lint/test_gaps.py` hold tests written *before* their corresponding fix, asserting the correct/desired behavior (not the current one) for known gaps tracked in `TODO.md`. When one of these was red and is now green, the fix has landed — see `TODO.md` for the current status of each. New known gaps should get a test here first, red, before the fix.
 
 ---
 
 ## Coding conventions
 
-- **No external runtime dependencies.** Everything must work with the Python standard library. Dev/test dependencies are fine but must not be required for the package itself.
+- **Minimal runtime dependencies.** Parsing and doc generation are stdlib-only; PyYAML is the one runtime dependency (config file support). Don't add more without discussion.
 - **Keep `core.py` and `lint.py` self-contained.** Avoid creating abstractions just to share a few lines between them.
 - **Diff-safe by default.** Any change to `generate_markdown` must preserve the property that a second run on unchanged RTL produces zero file writes.
 - **No silent failures.** Parsing failures (unrecognised file, no module found) should be handled gracefully and surfaced — not swallowed.
@@ -101,9 +75,9 @@ RTL source used by a test belongs in that suite's `fixtures/` directory as a rea
 4. Run the full test suite before submitting.
 5. If the change adds a new CLI flag, update:
    - The relevant `argparse` block in `cli.py` or `lint.py`
-   - `README.md` CLI reference section
-   - `SKILLS.md` capability table
-   - `docs/specs.md` if it affects documented behaviour
+   - `SKILLS.md` flags table (the canonical CLI reference)
+   - `README.md`, if it's significant enough to belong in the pitch
+   - `CLAUDE.md`, if it affects how the codebase should be understood by future contributors
 
 ---
 

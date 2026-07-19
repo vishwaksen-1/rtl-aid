@@ -125,9 +125,30 @@ class TestFeatureName(unittest.TestCase):
         # Assert
 ```
 
-## Test Count Summary
+## Test Count Summary (v0.2.8)
 
-- **Core tests:** 43
-- **Lint tests:** 129
-- **Integration tests:** 9
-- **Total:** 181 tests
+- **Core tests:** 121 (49 new: markdown output handling, DOT parent dirs, circular deps, large ports)
+- **Lint tests:** 43 (unchanged)
+- **Config tests:** 80 (70 existing + 10 new: CLI edge cases, nested paths, special characters)
+- **Integration tests:** 10 (unchanged)
+- **Total:** 254 tests
+
+### v0.2.8 Additions
+
+**Edge Case Tests** (`tests/config/test_cli_edge_cases.py` — 10 new)
+- DOT/JSON export with nested output paths (parent dir auto-creation)
+- Paths with spaces in directory names
+- Mixed absolute/relative paths in config
+- Graph-only export mode (--json-graph-file + --export-dot without rescanning)
+
+**Markdown Enhancements** (`tests/core/test_markdown.py` — 3 new)
+- Nested output directory creation
+- Dry-run mode (verify no files written)
+- Large port lists (50+ ports) without truncation
+
+**DOT Export Enhancements** (`tests/core/test_export_dot.py` — 2 new)
+- Parent directory creation for nested output paths
+- Circular dependency handling (A→B→A without infinite loops)
+
+### Bug Fixed in v0.2.8
+**DOT Export missing parent directory creation** — Added `os.makedirs()` before file writes in `export_dot()` and `export_dot_from_file()` (src/rtl_aid/core.py lines 565, 583). Resolves FileNotFoundError when using nested output paths like `--export-dot output/nested/graph.dot`.

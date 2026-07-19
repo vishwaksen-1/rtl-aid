@@ -1,10 +1,6 @@
 # Config File Feature Tests
 
-Comprehensive test suite for Tier 2 feature: **Config file support (YAML) for rtldoc/rtllint**.
-
-## Overview
-
-These tests define the expected behavior for reading and processing `.rtl-aidrc.yml` config files. They are designed to be run **before** implementation (TDD approach) and will initially fail until the feature is implemented.
+Test suite for config file support (YAML) in `rtldoc`/`rtllint`, backed by `src/rtl_aid/config/__init__.py`.
 
 ## Test Structure
 
@@ -23,239 +19,55 @@ tests/config/
 ├── test_config_discovery.py    # Config file search (upward scan, --config flag)
 ├── test_config_parsing.py      # YAML parsing and validation
 ├── test_config_precedence.py   # CLI args vs config file precedence
+├── test_config_path_resolution.py  # Relative path resolution vs config file location
+├── test_config_glob_patterns.py    # Glob expansion in dir/file entries
+├── test_functions_config.py    # SV built-in function config merging
 ├── test_init_workflow_config.py # --init-workflow generates config
+├── test_cli_config_integration.py # CLI wiring for --config
+├── test_cli_edge_cases.py      # Odd paths, missing files, malformed input via CLI
 └── test_config_integration.py  # E2E integration tests
 ```
 
 ## Test Modules
 
 ### `test_config_discovery.py` — File Discovery
-Tests for finding and loading `.rtl-aidrc.yml` config files.
-
-**Key scenarios:**
-- Find config in current directory
-- Find config by searching upward (git-style)
-- Find config multiple levels up
-- Stop at filesystem root if no config found
-- Prefer nearest config in search path
-- `--config FILE` flag overrides upward search
-- `--config FILE` with relative paths
-- Error if `--config FILE` points to missing file
-- Gracefully handle missing config (use CLI defaults)
-
-**Expected behavior:**
-- Default search: Look in `.` → `..` → `../..` until root or config found
-- Filename: `.rtl-aidrc.yml`
-- Return absolute path to config file, or `None` if not found
+- Find config in current directory or by searching upward (git-style), multiple levels up
+- Stop at filesystem root if none found; prefer nearest config in the search path
+- `--config FILE` overrides upward search (including relative paths); errors if the path doesn't exist
+- Missing config falls back to CLI defaults gracefully
 
 ### `test_config_parsing.py` — Parsing & Validation
-Tests for parsing YAML and validating config structure.
-
-**Key scenarios:**
-- Parse valid rtldoc section
-- Parse valid rtllint section
-- Parse empty or bare config
-- Error on malformed YAML
-- Parse both rtldoc and rtllint sections
-- Coerce single strings to lists (for `dir`, `file`, `exclude`, `include`)
-- Handle comments and blank lines
-- Validate types (strings, booleans, integers, lists)
-- Error on invalid option types
-- Warn/error on unknown options
-- Validate mutually exclusive options (e.g., `dir` and `file`)
-
-**Expected behavior:**
-- Return dict: `{"rtldoc": {...}, "rtllint": {...}}`
-- Coerce single values to lists automatically
-- Clear error messages for validation failures
+- Parse `rtldoc`/`rtllint` sections (together or alone), empty/bare configs
+- Coerce single values to lists (`dir`, `file`, `exclude`, `include`)
+- Error on malformed YAML, invalid option types, or mutually exclusive options (`dir` + `file`)
 
 ### `test_config_precedence.py` — CLI Override
-Tests for CLI args overriding config file values.
-
-**Key scenarios:**
-- CLI `--dir` overrides config `rtldoc.dir`
-- CLI `--out` overrides config `rtldoc.out`
-- CLI `-v` overrides config `rtldoc.verbose`
-- CLI `--ci` overrides config `rtldoc.ci`
-- CLI `--exclude` overrides config `rtldoc.exclude`
-- CLI `--json-graph` overrides config `rtldoc.json_graph`
-- CLI `--dry-run` overrides config `rtldoc.dry_run`
-- CLI `-I` overrides config `rtllint.include`
-- CLI file args override config `rtllint.file`
-- Config used when CLI args not set/None
-- Mutually exclusive flags (e.g., `--file` wins over config `dir`)
-- Unset CLI args fall through to config defaults
-
-**Expected behavior:**
-- Explicit CLI args always win
-- Missing/unset CLI args use config values
+- Every CLI flag with a config counterpart overrides its config value when set
+- Unset CLI args fall through to config values, which fall through to built-in defaults
 - Precedence: `CLI args > config file > built-in defaults`
 
-### `test_init_workflow_config.py` — Workflow Integration
-Tests for `--init-workflow` generating config files.
-
-**Key scenarios:**
-- `--init-workflow` creates both `.rtl-aidrc.yml` and workflow file
-- Created config file is valid YAML
-- Config contains template sections (rtldoc, rtllint)
-- Config includes documentation comments
-- Never overwrite existing config file
-- Never overwrite existing workflow file
-- Clear error message if file already exists
-- Exit code 1 on error
-- Create `.github/workflows/` directory if needed
-- Generated config is readable by `parse_config()`
-- Config shows common options and examples
-- Config comments indicate required vs optional fields
-- Config includes exclude pattern examples
-
-**Expected behavior:**
-- `rtldoc --init-workflow` creates `.rtl-aidrc.yml` in working directory
-- File includes extensive comments showing all options
-- Both files must not exist beforehand (error if they do)
+### `test_init_workflow_config.py` — `--init-workflow`
+- Creates `.rtl-aidrc.yml` + `.github/workflows/rtl-checks.yml`, generating parent dirs as needed
+- Generated config is valid YAML, readable by `parse_config()`, documented with comments
+- Refuses to overwrite either file if it already exists (exit 1, clear error)
 
 ### `test_config_integration.py` — End-to-End
-Integration tests combining multiple config features.
-
-**Key scenarios (rtldoc):**
-- rtldoc reads config from current directory
-- CLI args override config values
-- `--config FILE` uses explicit path
-- All rtldoc options processed correctly
-- Proper merging of config + CLI args
-
-**Key scenarios (rtllint):**
-- rtllint reads config from current directory
-- CLI args override config values
-- All rtllint options processed correctly
-
-**Key scenarios (discovery):**
-- Find config from deep subdirectory
-- Prefer nearest config over distant
-- Stop at first config found in upward search
-
-**Key scenarios (errors):**
-- Malformed config produces clear error
-- Invalid option type produces error
-- Missing `--config FILE` produces error
+- rtldoc/rtllint reading config from CWD or via `--config FILE`, with full option merging
+- Discovery from a deep subdirectory; malformed/invalid configs surfaced as clear errors
 
 ## Running Tests
 
-**All config tests:**
 ```bash
+# All config tests
 python -m unittest tests.test_config -v
-```
 
-**Specific test class:**
-```bash
+# Specific test class
 python -m unittest tests.config.test_config_discovery.TestConfigDiscovery -v
 ```
 
-**Specific test:**
-```bash
-python -m unittest tests.config.test_config_discovery.TestConfigDiscovery.test_find_config_in_current_directory -v
-```
-
-## Implementation Requirements
-
-The tests expect the following functions in `rtl_aid/config.py`:
-
-```python
-class ConfigError(Exception):
-    """Raised when config parsing or validation fails."""
-    pass
-
-def find_config_file(start_dir=None, config_flag=None) -> str | None:
-    """Search for .rtl-aidrc.yml, or use explicit --config flag."""
-
-def parse_config(filepath) -> dict:
-    """Parse YAML config file. Raise ConfigError on invalid format."""
-
-def validate_config(config: dict) -> None:
-    """Validate config structure and types. Raise ConfigError if invalid."""
-
-def merge_config_with_args(config: dict, cli_args: dict, section: str) -> dict:
-    """Merge config file values with CLI args. CLI args take precedence."""
-
-def load_config_for_rtldoc() -> dict:
-    """Load rtldoc section from found .rtl-aidrc.yml."""
-
-def load_config_for_rtllint() -> dict:
-    """Load rtllint section from found .rtl-aidrc.yml."""
-```
-
-Additionally, CLI integration:
-
-- Add `--config FILE` argument to both rtldoc and rtllint CLIs
-- Modify `--init-workflow` to also generate `.rtl-aidrc.yml`
-- Load config and merge with CLI args before processing
-
-## Fixture Files
-
-Located in `tests/config/fixtures/`:
-
-| File | Purpose |
-|------|---------|
-| `rtldoc-valid.yml` | Valid rtldoc config with multiple options |
-| `rtllint-valid.yml` | Valid rtllint config |
-| `combined-valid.yml` | Both rtldoc and rtllint sections |
-| `malformed.yml` | Invalid YAML (unclosed brackets, etc.) |
-| `invalid-types.yml` | Options with wrong types |
-| `single-values.yml` | Single strings where lists expected (test coercion) |
-| `empty.yml` | Empty/bare config file |
-| `unknown-keys.yml` | Unknown/unsupported options |
-| `rtl-aidrc-template.yml` | Template for --init-workflow |
-
-## Test Count
-
-- **Config discovery:** 8 tests
-- **Config parsing:** 10 tests
-- **Config validation:** 6 tests
-- **Config precedence:** 12 tests
-- **Init workflow:** 13 tests
-- **Init workflow errors:** 2 tests
-- **Init workflow content:** 5 tests
-- **Integration (rtldoc):** 5 tests
-- **Integration (rtllint):** 3 tests
-- **Integration (search):** 3 tests
-- **Integration (errors):** 3 tests
-
-**Total: ~70 tests** (exact count depends on implementation)
-
 ## Design Decisions
 
-### File Discovery
-- **Search style:** Git-style (upward from current directory)
-- **Filename:** `.rtl-aidrc.yml` (explicit, matches project name)
-- **Format:** YAML only (initially; TOML can be added later)
-- **CLI override:** `--config FILE` to use explicit path
-
-### Option Mapping
-- **Structure:** Nested (`rtldoc: {...}`, `rtllint: {...}`)
-- **Naming:** snake_case (consistent with Python)
-- **Lists:** Automatic coercion of single values to lists
-- **Key names:** Match CLI flags (e.g., `--dir` → `dir`, `--json-graph-file` → `json_graph_file`)
-
-### Precedence
-- **CLI args always win** over config file values
-- **Config file** provides defaults when CLI args not provided
-- **Built-in defaults** used when neither config nor CLI args set
-
-### Init Workflow
-- **Template:** Extensive comments explaining each option
-- **Safety:** Never overwrite existing files (error if they exist)
-- **Location:** `.rtl-aidrc.yml` in project root alongside `.github/workflows/rtl-checks.yml`
-
-## Next Steps
-
-After tests are passing:
-1. Implement `rtl_aid/config.py` module
-2. Integrate config loading into CLI (rtldoc, rtllint)
-3. Add `--config FILE` argument
-4. Update `--init-workflow` to generate config
-5. Document config file format in README/CLAUDE.md
-
----
-
-**Status:** Test suite ready for TDD implementation  
-**Created:** 2026-07-18
+- **Search style:** Git-style, upward from current directory. Filename: `.rtl-aidrc.yml`. YAML only.
+- **Structure:** Nested (`rtldoc: {...}`, `rtllint: {...}`), snake_case keys matching CLI flag names.
+- **Lists:** Single values auto-coerce to lists.
+- **Paths:** Relative paths in the config resolve against the config file's directory, not CWD.
