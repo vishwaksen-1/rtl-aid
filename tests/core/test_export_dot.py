@@ -166,6 +166,43 @@ class TestExportDot(unittest.TestCase):
 
         self.assertIn("digraph", content)
 
+    def test_export_dot_creates_parent_directories(self):
+        """export_dot should create parent directories for output file."""
+        parser = self._make_parser()
+        dot_file = os.path.join(self.tmpdir.name, "nested", "output", "graph.dot")
+
+        parser.export_dot(dot_file)
+
+        # Parent directories should be created
+        self.assertTrue(os.path.isdir(os.path.dirname(dot_file)))
+        # DOT file should exist
+        self.assertTrue(os.path.exists(dot_file))
+
+    def test_export_dot_circular_dependency(self):
+        """export_dot should handle circular dependencies (A->B->A)."""
+        parser = VerilogWikiParser([], verbose=0, ci=False)
+        parser.modules = {
+            "module_a": {"file": "a.v", "inputs": [], "outputs": [], "inouts": [], "parameters": {}, "calls": ["module_b"]},
+            "module_b": {"file": "b.v", "inputs": [], "outputs": [], "inouts": [], "parameters": {}, "calls": ["module_a"]},
+        }
+        parser.called_by = {
+            "module_a": ["module_b"],
+            "module_b": ["module_a"],
+        }
+        dot_file = os.path.join(self.tmpdir.name, "circular.dot")
+
+        # Should not hang or error
+        parser.export_dot(dot_file)
+
+        self.assertTrue(os.path.exists(dot_file))
+        with open(dot_file) as f:
+            content = f.read()
+
+        self.assertIn("module_a", content)
+        self.assertIn("module_b", content)
+        # Both directions should be present
+        self.assertIn("->", content)
+
 
 if __name__ == "__main__":
     unittest.main()

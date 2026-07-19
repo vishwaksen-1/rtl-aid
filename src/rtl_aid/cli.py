@@ -1,10 +1,54 @@
 import argparse
 import os
 import sys
+import glob
 from importlib import resources
 from . import __version__
 from .core import VerilogWikiParser
 from .config import find_config_file, parse_config, validate_config, merge_config_with_args, create_config_file, ConfigError
+
+def expand_glob_patterns(paths, base_dir=None):
+    """Expand glob patterns in path list, relative to base_dir.
+
+    If a path contains wildcards, expand it using glob.
+    Otherwise, return the path as-is.
+
+    Relative paths are resolved relative to base_dir (if provided).
+    Absolute paths are used as-is regardless of base_dir.
+
+    Args:
+        paths: List of paths, may contain glob patterns
+        base_dir: Base directory for resolving relative paths (typically config file dir)
+
+    Returns:
+        list: Expanded paths (glob patterns replaced with matched files)
+    """
+    if not paths:
+        return []
+
+    expanded = []
+    for path in paths:
+        # Resolve relative paths relative to base_dir
+        if base_dir and not os.path.isabs(path):
+            resolved_path = os.path.join(base_dir, path)
+        else:
+            resolved_path = path
+
+        # Check if path contains glob wildcards
+        if any(char in resolved_path for char in ['*', '?', '[']):
+            # Expand glob pattern
+            matches = glob.glob(resolved_path, recursive=True)
+            if matches:
+                expanded.extend(sorted(matches))
+            else:
+                # No matches found, keep the original path (let VerilogWikiParser handle the error)
+                expanded.append(resolved_path)
+        else:
+            # Not a glob pattern, keep as-is
+            expanded.append(resolved_path)
+
+    return expanded
+
 
 def init_workflow(output_dir: str = ".") -> None:
     """Create GitHub Actions workflow and config file templates.
@@ -149,38 +193,78 @@ def main():
         init_workflow(".")
         sys.exit(0)
 
+    # Load config file if present
+    full_config = {}
+    config_file_dir = None  # Directory of config file (for path resolution)
+    try:
+        config_file = find_config_file(config_flag=args.config)
+        if config_file:
+            full_config = parse_config(config_file)
+            validate_config(full_config)
+            # Store config file directory for relative path resolution
+            config_file_dir = os.path.dirname(os.path.abspath(config_file))
+    except ConfigError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    # Merge CLI args with config (CLI takes precedence)
+    cli_args = {
+        "dir": args.dir,
+        "file": args.file,
+        "out": args.out if args.out != "temp/docs/modules" else None,
+        "v": args.v,
+        "ci": args.ci,
+        "print_errors": args.print_errors,
+        "json_graph": args.json_graph,
+        "json_graph_file": args.json_graph_file,
+        "export_dot": args.export_dot,
+        "exclude": args.exclude,
+        "dry_run": args.dry_run,
+    }
+
+    merged = merge_config_with_args(full_config, cli_args, "rtldoc")
+
     # Handle graph-only mode: load existing graph.json and export to DOT
-    if args.json_graph_file and args.export_dot and not args.dir and not args.file:
+    if merged.get("json_graph_file") and merged.get("export_dot") and not merged.get("dir") and not merged.get("file"):
         v = VerilogWikiParser(
             [],
-            verbose=args.v,
+            verbose=merged.get("verbose", 0),
             ci=False,
             json_graph=False,
-            json_graph_file=args.json_graph_file,
-            print_errors=args.print_errors,
-            exclude=args.exclude,
-            dry_run=args.dry_run,
+            json_graph_file=merged.get("json_graph_file"),
+            print_errors=merged.get("print_errors", False),
+            exclude=merged.get("exclude"),
+            dry_run=merged.get("dry_run", False),
         )
-        v.export_dot_from_file(args.json_graph_file, args.export_dot)
+        v.export_dot_from_file(merged.get("json_graph_file"), merged.get("export_dot"))
         return
 
-    if not args.dir and not args.file:
-        parser.error("one of the arguments -d/--dir -f/--file is required")
+    # Require dir or file from either CLI or config
+    if not merged.get("dir") and not merged.get("file"):
+        parser.error("one of the arguments -d/--dir -f/--file is required (or specify in config file)")
 
-    paths = args.dir if args.dir else args.file
+    # Get paths and expand glob patterns
+    # Use config file directory as base for relative paths
+    paths = merged.get("dir") if merged.get("dir") else merged.get("file")
+    paths = expand_glob_patterns(paths, base_dir=config_file_dir)
+    out = merged.get("out", "temp/docs/modules")
+
+    # Resolve output directory relative to config file if present
+    if config_file_dir and not os.path.isabs(out):
+        out = os.path.join(config_file_dir, out)
 
     v = VerilogWikiParser(
         paths,
-        verbose=args.v,
-        ci=args.ci,
-        json_graph=args.json_graph,
-        json_graph_file=args.json_graph_file,
-        print_errors=args.print_errors,
-        exclude=args.exclude,
-        dry_run=args.dry_run,
+        verbose=merged.get("verbose", 0),
+        ci=merged.get("ci", False),
+        json_graph=merged.get("json_graph", False),
+        json_graph_file=merged.get("json_graph_file"),
+        print_errors=merged.get("print_errors", False),
+        exclude=merged.get("exclude"),
+        dry_run=merged.get("dry_run", False),
     )
     v.scan()
-    v.generate_markdown(args.out)
+    v.generate_markdown(out)
     v.write_json(args.out)
     if args.export_dot:
         v.export_dot(args.export_dot)

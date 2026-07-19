@@ -5,13 +5,24 @@
 #
 # Orchestrates the full release workflow:
 # 1. Queries PyPI for the current published version
-# 2. Validates new version against current version
+# 2. Validates new version against current version (PEP 440 compliant)
 # 3. Confirms changes to version files
 # 4. Confirms documentation updates
 # 5. Builds distribution packages
-# 6. Uploads to TestPyPI and PyPI
+# 6. Uploads to TestPyPI and/or PyPI
 #
-# Usage: ./scripts/release.sh
+# Version Format (PEP 440):
+#   Release:      0.2.8
+#   Pre-release:  0.2.8a1, 0.2.8b2, 0.2.8rc3 (alpha, beta, release candidate)
+#   Post-release: 0.2.8.post1
+#   Dev release:  0.2.8.dev1
+#   Local:        0.2.8+local
+#
+# Usage:
+#   ./scripts/release.sh                    # Interactive mode (prompts for target)
+#   ./scripts/release.sh --target testpypi  # Upload to TestPyPI only
+#   ./scripts/release.sh --target pypi      # Upload to PyPI only
+#   ./scripts/release.sh --target both      # Upload to both (default)
 #
 
 set -e
@@ -19,6 +30,39 @@ set -e
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYPROJECT_TOML="$PROJECT_ROOT/pyproject.toml"
 INIT_PY="$PROJECT_ROOT/src/rtl_aid/__init__.py"
+
+# Default target (can be overridden by --target flag)
+UPLOAD_TARGET="both"
+
+# Parse command-line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --target)
+            UPLOAD_TARGET="$2"
+            shift 2
+            ;;
+        -h|--help)
+            grep "Usage:" "$0" | head -5
+            exit 0
+            ;;
+        *)
+            print_error "Unknown option: $1"
+            exit 1
+            ;;
+    esac
+done
+
+# Validate target option
+case "$UPLOAD_TARGET" in
+    testpypi|pypi|both)
+        : # Valid
+        ;;
+    *)
+        echo "Invalid target: $UPLOAD_TARGET"
+        echo "Valid options: testpypi, pypi, both"
+        exit 1
+        ;;
+esac
 
 # Color codes
 RED='\033[0;31m'
@@ -116,12 +160,19 @@ main() {
     printf "Local version in pyproject.toml: ${YELLOW}%s${NC}\n\n" "$(get_file_version)"
 
     # Ask for new version
-    printf "${BLUE}Enter new version number:${NC} "
+    printf "${BLUE}Enter new version number (PEP 440):${NC} "
     read -r NEW_VERSION
 
-    # Validate version format (basic check for X.Y.Z)
-    if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-        print_error "Invalid version format. Expected X.Y.Z (e.g., 0.2.1)"
+    # Validate version format (PEP 440 compliant)
+    # Supports: X.Y.Z, X.Y, X.Y.Za1, X.Y.Zb2, X.Y.Zrc3, X.Y.Z.post1, X.Y.Z.dev1, X.Y.Z+local
+    if ! [[ "$NEW_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?((a|alpha|b|beta|rc|c)[0-9]+)?(.post[0-9]+)?(.dev[0-9]+)?(\+[a-zA-Z0-9]+)?$ ]]; then
+        print_error "Invalid version format. Expected PEP 440 format."
+        echo "Examples:"
+        echo "  Release: 0.2.8"
+        echo "  Pre-release: 0.2.8a1, 0.2.8b2, 0.2.8rc3"
+        echo "  Post-release: 0.2.8.post1"
+        echo "  Dev release: 0.2.8.dev1"
+        echo "  Local: 0.2.8+local"
         exit 1
     fi
 
@@ -206,10 +257,32 @@ main() {
     print_success "Build artifacts created:"
     ls -lh "$WHEEL_FILE" "$TAR_FILE" | awk '{printf "  %s (%s)\n", $9, $5}'
 
-    # TestPyPI upload
-    print_header "TestPyPI Upload"
+    # If no --target specified, ask user where to push
+    if [[ "$UPLOAD_TARGET" == "both" ]] && [[ $# -eq 0 ]]; then
+        print_header "Choose Upload Target"
+        echo "Where would you like to upload?"
+        echo "  1. TestPyPI only (recommended for testing)"
+        echo "  2. PyPI only (production)"
+        echo "  3. Both TestPyPI and PyPI"
+        echo
+        printf "${BLUE}Enter choice (1-3):${NC} "
+        read -r choice
 
-    if ask_yes_no "Upload to TestPyPI first (recommended)?"; then
+        case $choice in
+            1) UPLOAD_TARGET="testpypi" ;;
+            2) UPLOAD_TARGET="pypi" ;;
+            3) UPLOAD_TARGET="both" ;;
+            *)
+                print_error "Invalid choice: $choice"
+                exit 1
+                ;;
+        esac
+    fi
+
+    # TestPyPI upload
+    if [[ "$UPLOAD_TARGET" == "testpypi" ]] || [[ "$UPLOAD_TARGET" == "both" ]]; then
+        print_header "TestPyPI Upload"
+
         echo
         printf "Uploading %s to TestPyPI...\n" "$NEW_VERSION"
         printf "%s\n" "=================================================="
@@ -221,17 +294,15 @@ main() {
             print_error "TestPyPI upload failed"
             exit 1
         fi
-    else
-        print_warning "Skipping TestPyPI upload"
     fi
 
     # PyPI upload
-    print_header "PyPI (Production) Upload"
+    if [[ "$UPLOAD_TARGET" == "pypi" ]] || [[ "$UPLOAD_TARGET" == "both" ]]; then
+        print_header "PyPI (Production) Upload"
 
-    if ask_yes_no "Upload to PyPI (production)?"; then
         echo
         printf "${YELLOW}This will make %s publicly available!${NC}\n" "$NEW_VERSION"
-        if ask_yes_no "Are you absolutely sure?"; then
+        if ask_yes_no "Are you absolutely sure you want to upload to PyPI?"; then
             printf "Uploading %s to PyPI...\n" "$NEW_VERSION"
             printf "%s\n" "=================================================="
 
@@ -246,8 +317,6 @@ main() {
             print_warning "PyPI upload cancelled"
             exit 0
         fi
-    else
-        print_warning "Skipping PyPI upload"
     fi
 
     # Final summary

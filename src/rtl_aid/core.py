@@ -562,6 +562,7 @@ class VerilogWikiParser(object):
             }
         dot_content = self._graph_to_dot(graph)
         if not self.dry_run:
+            os.makedirs(os.path.dirname(out_file) or ".", exist_ok=True)
             with open(out_file, "w") as f:
                 f.write(dot_content)
 
@@ -579,6 +580,7 @@ class VerilogWikiParser(object):
 
         dot_content = self._graph_to_dot(graph)
         if not self.dry_run:
+            os.makedirs(os.path.dirname(dot_file) or ".", exist_ok=True)
             with open(dot_file, "w") as f:
                 f.write(dot_content)
         print(f"Exported graph to {dot_file}")

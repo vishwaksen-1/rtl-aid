@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rtl-aid"
-version = "0.2.4"
+version = "0.2.8a1"
 description = "CI-native documentation layer for RTL projects"
 readme = "README.md"
 requires-python = ">=3.7"
@@ -17,7 +17,9 @@ keywords = [
     "documentation", "linting", "ci", "hardware", "verilator",
     "dependency-graph", "code-analysis", "agentic"
 ]
-dependencies = []
+dependencies = [
+    "PyYAML>=6.0.3",
+]
 
 [project.urls]
 Homepage = "https://github.com/vishwaksen-1/rtl-aid"
