@@ -1,0 +1,119 @@
+# SystemVerilog Built-in Functions Configuration
+# Packaged functions bundled with rtl-aid
+# Users can override with --functions-config FILE
+#
+# Each function definition:
+#   python_func: inline expression OR function name from library
+#   library: Required library ("math", "builtin", "sv_builtin_functions", etc.)
+
+functions:
+  $clog2:
+    description: "Ceiling log2 - address width calculator"
+    python_func: "math.ceil(math.log2(max(1, x)))"
+    library: "math"
+    category: "math"
+    priority: 5
+
+  $bits:
+    description: "Bit width of type or expression"
+    python_func: "x.bit_length() if isinstance(x, int) and x > 0 else 1"
+    library: "builtin"
+    category: "type_query"
+    priority: 5
+
+  $size:
+    description: "Array size or vector size"
+    python_func: "len(x) if isinstance(x, (list, tuple)) else x"
+    library: "builtin"
+    category: "array_query"
+    priority: 5
+
+  $high:
+    description: "Highest legal index of array or vector"
+    python_func: "len(x) - 1 if isinstance(x, (list, tuple)) else (x - 1 if x > 0 else 0)"
+    library: "builtin"
+    category: "bounds"
+    priority: 4
+
+  $low:
+    description: "Lowest legal index of array or vector"
+    python_func: "low"
+    library: "sv_builtin_functions"
+    category: "bounds"
+    priority: 4
+
+  $left:
+    description: "Left index of array or vector (leftmost)"
+    python_func: "len(x) - 1 if isinstance(x, (list, tuple)) else (x - 1 if x > 0 else 0)"
+    library: "builtin"
+    category: "bounds"
+    priority: 4
+
+  $right:
+    description: "Right index of array or vector (rightmost)"
+    python_func: "0"
+    library: "builtin"
+    category: "bounds"
+    priority: 4
+
+  $dimensions:
+    description: "Number of dimensions of array"
+    python_func: "dimensions"
+    library: "sv_builtin_functions"
+    category: "array_query"
+    priority: 3
+
+  $signed:
+    description: "Convert to signed (type cast)"
+    python_func: "x"
+    library: "builtin"
+    category: "type_conversion"
+    priority: 3
+
+  $unsigned:
+    description: "Convert to unsigned (type cast)"
+    python_func: "x"
+    library: "builtin"
+    category: "type_conversion"
+    priority: 3
+
+  $increment:
+    description: "Array index increment direction (+1 or -1)"
+    python_func: "increment"
+    library: "sv_builtin_functions"
+    category: "bounds"
+    priority: 2
+
+  $countones:
+    description: "Count number of 1-bits in value"
+    python_func: "bin(x).count('1') if isinstance(x, int) and x >= 0 else 0"
+    library: "builtin"
+    category: "bit_operation"
+    priority: 2
+
+  $onehot:
+    description: "Check if value is one-hot (exactly one bit set)"
+    python_func: "1 if (isinstance(x, int) and x > 0 and bin(x).count('1') == 1) else 0"
+    library: "builtin"
+    category: "bit_operation"
+    priority: 2
+
+  $onehot0:
+    description: "Check if value is one-hot or zero"
+    python_func: "1 if (isinstance(x, int) and x >= 0 and bin(x).count('1') <= 1) else 0"
+    library: "builtin"
+    category: "bit_operation"
+    priority: 2
+
+  $isunbounded:
+    description: "Check if array is unbounded (dynamic)"
+    python_func: "isunbounded"
+    library: "sv_builtin_functions"
+    category: "array_query"
+    priority: 2
+
+metadata:
+  version: "1.0"
+  rtl_aid_version: ">=0.3.0"
+  generated_date: "2026-07-18"
+  maintainer: "rtl-aid team"

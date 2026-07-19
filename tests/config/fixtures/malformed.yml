@@ -1,0 +1,10 @@
+rtldoc:
+  dir:
+    - src/
+  out: docs/modules
+  verbose: 1
+  # Invalid YAML - missing value
+  ci:
+    # This is broken - nested value for boolean
+    nested: invalid
+  exclude: [unclosed list

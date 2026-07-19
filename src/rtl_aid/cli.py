@@ -4,6 +4,50 @@ import sys
 from importlib import resources
 from . import __version__
 from .core import VerilogWikiParser
+from .config import find_config_file, parse_config, validate_config, merge_config_with_args, create_config_file, ConfigError
+
+def init_workflow(output_dir: str = ".") -> None:
+    """Create GitHub Actions workflow and config file templates.
+
+    Args:
+        output_dir: Directory to create files in (default: current directory)
+
+    Raises:
+        SystemExit: On error or if files already exist
+    """
+    workflow_dir = os.path.join(output_dir, ".github", "workflows")
+    workflow_file = os.path.join(workflow_dir, "rtl-checks.yml")
+    config_file = os.path.join(output_dir, ".rtl-aidrc.yml")
+
+    # Check for existing files
+    if os.path.exists(workflow_file):
+        print(f"Error: {workflow_file} already exists", file=sys.stderr)
+        sys.exit(1)
+
+    if os.path.exists(config_file):
+        print(f"Error: {config_file} already exists", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        template_content = resources.read_text("rtl_aid.templates.workflows", "rtl-checks.yml")
+        config_template = resources.read_text("rtl_aid.templates", "rtl-aidrc-template.yml")
+    except FileNotFoundError as e:
+        print(f"Error: template not found: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        os.makedirs(workflow_dir, exist_ok=True)
+        with open(workflow_file, "w") as f:
+            f.write(template_content)
+        print(f"Created {workflow_file}")
+
+        with open(config_file, "w") as f:
+            f.write(config_template)
+        print(f"Created {config_file}")
+    except Exception as e:
+        print(f"Error creating files: {e}", file=sys.stderr)
+        sys.exit(1)
+
 
 def main():
     parser = argparse.ArgumentParser(prog="rtldoc")
@@ -17,7 +61,13 @@ def main():
     parser.add_argument(
         "--init-workflow",
         action="store_true",
-        help="Create GitHub Actions workflow template (.github/workflows/rtl-checks.yml)"
+        help="Create GitHub Actions workflow template (.github/workflows/rtl-checks.yml) and config file (.rtl-aidrc.yml)"
+    )
+
+    parser.add_argument(
+        "--config",
+        metavar="FILE",
+        help="Config file path (.rtl-aidrc.yml) — default searches upward from current directory"
     )
 
     group = parser.add_mutually_exclusive_group(required=False)
@@ -96,23 +146,7 @@ def main():
     args = parser.parse_args()
 
     if args.init_workflow:
-        workflow_dir = ".github/workflows"
-        workflow_file = os.path.join(workflow_dir, "rtl-checks.yml")
-
-        if os.path.exists(workflow_file):
-            print(f"Error: {workflow_file} already exists", file=sys.stderr)
-            sys.exit(1)
-
-        try:
-            template_content = resources.read_text("rtl_aid.templates.workflows", "rtl-checks.yml")
-        except FileNotFoundError:
-            print(f"Error: workflow template not found", file=sys.stderr)
-            sys.exit(1)
-
-        os.makedirs(workflow_dir, exist_ok=True)
-        with open(workflow_file, "w") as f:
-            f.write(template_content)
-        print(f"Created {workflow_file}")
+        init_workflow(".")
         sys.exit(0)
 
     # Handle graph-only mode: load existing graph.json and export to DOT

@@ -1,0 +1,11 @@
+# Config with unknown keys
+rtldoc:
+  dir:
+    - src/
+  unknown_option: value
+  another_unknown: 123
+
+rtllint:
+  file:
+    - test.v
+  unsupported_key: true

@@ -1,0 +1,39 @@
+# Packaged SystemVerilog Built-in Functions
+# This is the default configuration bundled with rtl-aid
+# Users can override these with --functions-config
+
+functions:
+  $clog2:
+    description: "Ceiling log2 - address width calculator"
+    python_func: "math.ceil(math.log2(max(1, x)))"
+    library: "math"
+    category: "math"
+    priority: 5
+
+  $bits:
+    description: "Bit width of type or expression"
+    python_func: "len(x) if hasattr(x, '__len__') else int(x).bit_length()"
+    library: "builtin"
+    category: "type_query"
+    priority: 5
+
+  $size:
+    description: "Array size or vector size"
+    python_func: "len(x)"
+    library: "builtin"
+    category: "array_query"
+    priority: 5
+
+  $high:
+    description: "Highest legal index of array or vector"
+    python_func: "x - 1"
+    library: "builtin"
+    category: "bounds"
+    priority: 4
+
+# Metadata
+metadata:
+  version: "1.0"
+  rtl_aid_version: ">=0.3.0"
+  generated_date: "2026-07-18"
+  maintainer: "rtl-aid team"

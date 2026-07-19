@@ -1,0 +1,6 @@
+# Config with invalid option types
+rtldoc:
+  dir: "src/"  # Should be a list
+  out: 123     # Should be string
+  verbose: "very"  # Should be int (0, 1, 2)
+  ci: "maybe"  # Should be boolean

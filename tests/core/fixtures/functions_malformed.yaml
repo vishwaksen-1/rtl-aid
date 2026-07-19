@@ -1,0 +1,21 @@
+# Malformed config file - intentionally broken for testing error handling
+
+functions:
+  $clog2:
+    description: "Ceiling log2"
+    python_func: "math.ceil(math.log2(max(1, x)))"
+    # Missing 'library' field - but let's say that's optional
+    category: "math"
+
+  $bits:
+    # Missing 'description' field
+    python_func: "nonexistent_function_xyz(x)"  # References non-existent Python function
+    library: "builtin"
+
+  $broken_func:
+    description: "This function references undefined module"
+    python_func: "undefined_module.nonexistent_func(x)"  # Module doesn't exist
+    library: "undefined_module"
+
+metadata:
+  version: "1.0"

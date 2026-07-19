@@ -1,0 +1,10 @@
+# Valid rtllint configuration
+rtllint:
+  file:
+    - src/module1.v
+    - src/module2.v
+  include:
+    - include/
+    - common/
+  verbose: false
+  dry_run: false

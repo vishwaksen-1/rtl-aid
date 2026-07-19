@@ -1,10 +1,10 @@
 # Test Coverage Reference
 
-Quick lookup guide showing which tests cover which features. Total: **235 tests** across 3 directories.
+Quick lookup guide showing which tests cover which features. Total: **234 tests** across 4 directories.
 
 ---
 
-## Core Features (`tests/core/`) — 73 tests
+## Core Features (`tests/core/`) — 116 tests
 
 ### `test_parsing.py` — 2 tests
 **Port/parameter parsing and module dependency extraction**
@@ -39,6 +39,19 @@ Quick lookup guide showing which tests cover which features. Total: **235 tests*
 ### `test_export_dot.py` — 8 tests
 **Graphviz DOT export for dependency graphs**
 - `TestExportDot` (8): File creation, Graphviz syntax, node/edge inclusion, JSON→DOT conversion
+
+### `test_builtin_functions.py` — 39 tests (Tier 2)
+**SystemVerilog built-in function evaluation ($clog2, $bits, $size, $high)**
+- `TestFunctionsConfigLoading` (6): Config loading, merging, user overrides, malformed config fallback
+- `TestFunctionEvaluation` (5): $clog2, $bits, $size, $high evaluation with constant arguments
+- `TestFunctionMarkdownOutput` (3): Display format showing both function and evaluated value
+- `TestFunctionEdgeCases` (8): Zero/large values, non-integer args, undefined params, unresolved fallback
+- `TestNestedFunctionCalls` (3): Nested evaluation, partial failures, bottom-up resolution
+- `TestFunctionErrorHandling` (3): Missing functions, invalid arguments, graceful degradation
+- `TestMalformedConfigFallback` (2): Config parse errors, invalid YAML
+- `TestVerbosityLevelWarnings` (3): Warning output at different verbosity levels (-v, -vv)
+- `TestFunctionConfigIntegration` (5): End-to-end workflow, config loading in scan(), markdown generation
+- `TestFunctionDocumentation` (2): Config file format, usage examples
 
 ---
 
@@ -75,6 +88,37 @@ Quick lookup guide showing which tests cover which features. Total: **235 tests*
 
 ---
 
+## Config Features (`tests/config/`) — ~70 tests (Tier 2)
+
+### `test_config_discovery.py` — 8 tests
+**Config file discovery and upward search**
+- `TestConfigDiscovery` (7): Current dir, parent dir, grandparent dir, upward search, prefer nearest, stop at root, --config override
+- `TestConfigFileDefaults` (1): Missing config uses CLI defaults
+
+### `test_config_parsing.py` — 16 tests
+**YAML parsing and validation**
+- `TestConfigFileParsing` (6): rtldoc section, rtllint section, empty file, malformed YAML, combined sections, type coercion
+- `TestConfigValidation` (10): Type validation (dir list, out string, verbose int/bool, ci bool), invalid types error, unknown options, mutually exclusive options
+
+### `test_config_precedence.py` — 12 tests
+**CLI args override config file**
+- `TestConfigPrecedence` (12): CLI overrides for all options (dir, out, verbose, ci, exclude, json_graph, dry_run), config defaults when CLI not set, mutually exclusive handling
+
+### `test_init_workflow_config.py` — 20 tests
+**--init-workflow generates config files**
+- `TestInitWorkflowGeneratesConfig` (7): Creates config file, valid YAML, template sections, no overwrite existing, no overwrite workflow, error messages, creates directories
+- `TestInitWorkflowConfigContent` (5): Has rtldoc/rtllint sections, documentation comments, shows common options
+- `TestInitWorkflowErrorHandling` (2): Permission errors, unwritable directory
+
+### `test_config_integration.py` — ~14 tests
+**End-to-end config feature integration**
+- `TestRtldocWithConfigFile` (4): Reads config from current dir, CLI override, --config flag, all options processed
+- `TestRtllintWithConfigFile` (3): Reads config, CLI override, all options processed
+- `TestConfigSearchUpward` (3): Deep subdirectory search, prefer nearest, stop at first
+- `TestConfigErrorHandling` (3): Malformed YAML errors, invalid types, missing --config errors
+
+---
+
 ## Integration Tests (`tests/integration/`) — 10 tests
 
 ### `test_features_e2e.py` — 10 tests
@@ -93,6 +137,9 @@ Quick lookup guide showing which tests cover which features. Total: **235 tests*
 ### `test_lint.py`
 **High-level import shim** — Re-exports all tests from `tests/lint/*` for unified test discovery.
 
+### `test_config.py`
+**High-level import shim** — Re-exports all tests from `tests/config/*` for unified test discovery (Tier 2 feature).
+
 ---
 
 ## How to Find Tests for a Feature
@@ -110,6 +157,16 @@ Quick lookup guide showing which tests cover which features. Total: **235 tests*
 | **Include directories** | `lint/test_include_dirs.py`, `lint/test_verilator_integration.py` | `TestRunLintIncludeDirs`, `TestIncludeDirEndToEnd` |
 | **Sensitivity list checks** | `lint/test_gaps.py` | `TestSensitivityListCompleteness` |
 | **Generate block validation** | `lint/test_gaps.py` | `TestUnlabeledGenerateBlocks` |
+| **Config file discovery** | `config/test_config_discovery.py` | `TestConfigDiscovery`, `TestConfigFileDefaults` |
+| **Config parsing & validation** | `config/test_config_parsing.py` | `TestConfigFileParsing`, `TestConfigValidation` |
+| **Config file format** | `config/test_config_parsing.py` | `TestConfigFileParsing` |
+| **CLI vs config precedence** | `config/test_config_precedence.py` | `TestConfigPrecedence` |
+| **--init-workflow config generation** | `config/test_init_workflow_config.py` | `TestInitWorkflowGeneratesConfig`, `TestInitWorkflowConfigContent`, `TestInitWorkflowErrorHandling` |
+| **Config integration** | `config/test_config_integration.py` | `TestRtldocWithConfigFile`, `TestRtllintWithConfigFile`, `TestConfigSearchUpward`, `TestConfigErrorHandling` |
+| **Built-in functions** | `core/test_builtin_functions.py` | `TestFunctionEvaluation`, `TestFunctionMarkdownOutput`, `TestFunctionEdgeCases` |
+| **Built-in function config** | `core/test_builtin_functions.py` | `TestFunctionsConfigLoading`, `TestMalformedConfigFallback` |
+| **Nested function evaluation** | `core/test_builtin_functions.py` | `TestNestedFunctionCalls` |
+| **Function error handling** | `core/test_builtin_functions.py` | `TestFunctionErrorHandling`, `TestFunctionEdgeCases` |
 
 ---
 

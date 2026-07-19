@@ -1,0 +1,15 @@
+# Combined rtldoc and rtllint configuration
+rtldoc:
+  dir:
+    - src/
+  out: temp/docs/modules
+  verbose: 0
+  ci: true
+  print_errors: true
+
+rtllint:
+  file:
+    - src/module.v
+  include:
+    - include/
+  verbose: true

@@ -1,0 +1,14 @@
+# Valid rtldoc configuration
+rtldoc:
+  dir:
+    - src/
+    - rtl/
+  out: docs/modules
+  verbose: 1
+  ci: false
+  exclude:
+    - src/testbench/
+    - src/sim/
+  json_graph: true
+  json_graph_file: docs/graph.json
+  dry_run: false

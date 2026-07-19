@@ -131,6 +131,9 @@ Check:
 
 See `test_gaps.py` for examples.
 
+# Creating Agents:
+Pass the agents relevant docs (TESTING.md, TODO.md, RULEBOOK.md, etc. according to the thing they're working on) along with the context they need for their work. Agents can be given a subset of the docs to focus on specific tasks, such as linting, documentation generation, or test coverage.
+
 ---
 
 **Last updated:** July 2026  

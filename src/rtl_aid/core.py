@@ -52,7 +52,7 @@ def _eval_ast_node(node):
 
 
 class VerilogWikiParser(object):
-    def __init__(self, paths, verbose=0, ci=False, json_graph=False, json_graph_file=None, print_errors=False, exclude=None, dry_run=False):
+    def __init__(self, paths, verbose=0, ci=False, json_graph=False, json_graph_file=None, print_errors=False, exclude=None, dry_run=False, functions_config=None):
         self.paths = paths
         self.modules = {}
         self.called_by = {}
@@ -65,6 +65,8 @@ class VerilogWikiParser(object):
         self.exclude = exclude or []
         self.issues = []
         self.dry_run = dry_run
+        self.functions_config = functions_config
+        self._functions_config_data = None
 
     # -------------------------
     # CLEAN COMMENTS
@@ -82,6 +84,57 @@ class VerilogWikiParser(object):
         if not defines:
             return text
         return re.sub(r"`(\w+)", lambda m: defines.get(m.group(1), m.group(0)), text)
+
+    def _load_functions_config(self):
+        """Load and merge packaged + user functions config."""
+        if self._functions_config_data is not None:
+            return self._functions_config_data
+
+        # Import functions module
+        try:
+            from rtl_aid.functions import (
+                load_packaged_functions,
+                load_functions_config,
+                merge_user_functions
+            )
+        except ImportError:
+            if self.verbose >= 1:
+                import logging
+                logging.warning("Could not import functions module")
+            self._functions_config_data = {}
+            return self._functions_config_data
+
+        # Load packaged config
+        packaged = load_packaged_functions()
+
+        # Load user config if provided
+        user_config = None
+        if self.functions_config:
+            user_config = load_functions_config(self.functions_config)
+
+        # Merge configs
+        merged_functions = merge_user_functions(packaged, user_config, self.verbose)
+
+        self._functions_config_data = merged_functions
+        return self._functions_config_data
+
+    def _evaluate_parameter_with_functions(self, expr, functions_config, known_values):
+        """Evaluate a parameter expression that may contain built-in functions.
+
+        Args:
+            expr: Expression string (may contain $clog2, $bits, etc.)
+            functions_config: dict of function definitions
+            known_values: dict of known parameter values
+
+        Returns:
+            int or None: Evaluated result, or None if evaluation fails
+        """
+        try:
+            from rtl_aid.functions import _evaluate_expr_with_functions
+        except ImportError:
+            return None
+
+        return _evaluate_expr_with_functions(expr, functions_config, known_values, self.verbose)
 
     def _resolve_parameter_expr(self, expr, known_values):
         substituted = expr
@@ -121,6 +174,9 @@ class VerilogWikiParser(object):
         parameters = []
         known_values = {}
 
+        # Load functions config for parameter evaluation
+        functions_config = self._load_functions_config()
+
         for p in re.split(r",\s*\n|,\s*", param_block):
             p = p.strip()
             is_localparam = p.startswith("localparam")
@@ -137,12 +193,23 @@ class VerilogWikiParser(object):
                 if _BARE_INT_RE.match(pexpr):
                     known_values[pname] = int(pexpr)
                 else:
-                    resolved = self._resolve_parameter_expr(pexpr, known_values)
-                    if resolved is not None:
-                        known_values[pname] = resolved
-                        display = f"{pname} = {pexpr}  (= {resolved})"
-                    else:
-                        display = f"{pname} = {pexpr}  (unresolved)"
+                    # Try function evaluation first if expression contains $
+                    resolved = None
+                    display_expr = pexpr
+                    if "$" in pexpr and functions_config:
+                        resolved = self._evaluate_parameter_with_functions(pexpr, functions_config, known_values)
+                        if resolved is not None:
+                            known_values[pname] = resolved
+                            display = f"{pname} = {pexpr} = {resolved}"
+
+                    # Fall back to standard resolution if functions didn't work
+                    if resolved is None:
+                        resolved = self._resolve_parameter_expr(pexpr, known_values)
+                        if resolved is not None:
+                            known_values[pname] = resolved
+                            display = f"{pname} = {pexpr}  (= {resolved})"
+                        else:
+                            display = f"{pname} = {pexpr}  (unresolved)"
 
             if is_localparam:
                 display = f"{display} (localparam)"

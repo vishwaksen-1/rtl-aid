@@ -1,0 +1,30 @@
+# User-defined custom SystemVerilog functions
+# This config demonstrates custom/vendor-specific functions
+# Functions here override packaged functions with the same name
+
+functions:
+  $clog2:
+    description: "Override: Custom ceiling log2 implementation"
+    python_func: "math.ceil(math.log2(max(1, x)))"
+    library: "math"
+    category: "math"
+    priority: 5
+
+  $vendor_param:
+    description: "Vendor-specific parameter function"
+    python_func: "x * 2 + 1"
+    library: "builtin"
+    category: "custom"
+    priority: 3
+
+  $my_func:
+    description: "User-defined helper function"
+    python_func: "x * 4"
+    library: "builtin"
+    category: "custom"
+    priority: 2
+
+metadata:
+  version: "1.0"
+  generated_by: "user"
+  generated_date: "2026-07-18"

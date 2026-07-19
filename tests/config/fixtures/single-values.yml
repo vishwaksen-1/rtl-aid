@@ -1,0 +1,9 @@
+# Config using single values instead of lists where lists are expected
+# Should be coerced to lists
+rtldoc:
+  dir: src/
+  exclude: testbench/
+
+rtllint:
+  file: src/module.v
+  include: include/

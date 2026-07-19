@@ -31,4 +31,4 @@ rtllint = "rtl_aid.lint:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-rtl_aid = ["templates/**"]
+rtl_aid = ["templates/**", "config/**"]
