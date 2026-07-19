@@ -8,8 +8,8 @@ import os
 from pathlib import Path
 
 
-class TestDotExportCLI(unittest.TestCase):
-    """Tests for DOT export via CLI with various scenarios."""
+class TestGraphExportCLI(unittest.TestCase):
+    """Tests for the unified --export-graph / --from-graph CLI surface."""
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -28,36 +28,34 @@ module sub_mod (input clk);
 endmodule
 """)
 
-    def test_dot_export_with_nested_output_path(self):
-        """--export-dot with nested path should create parent directories."""
+    def test_export_graph_dot_with_nested_output_path(self):
+        """--export-graph with a nested .dot path should create parent directories."""
         output_path = str(self.tmproot / "output" / "nested" / "graph.dot")
 
         original_cwd = os.getcwd()
         try:
             os.chdir(str(self.tmproot))
             result = subprocess.run(
-                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--export-dot", output_path],
+                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--export-graph", output_path],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
 
-            # Should succeed
             self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
-            # File should exist
             self.assertTrue(os.path.exists(output_path))
         finally:
             os.chdir(original_cwd)
 
-    def test_dot_export_with_absolute_path(self):
-        """--export-dot with absolute path should work."""
+    def test_export_graph_dot_with_absolute_path(self):
+        """--export-graph with an absolute .dot path should work."""
         output_path = os.path.join(self.tmproot, "graph.dot")
 
         original_cwd = os.getcwd()
         try:
             os.chdir(str(self.tmproot))
             result = subprocess.run(
-                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--export-dot", output_path],
+                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--export-graph", output_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -68,15 +66,15 @@ endmodule
         finally:
             os.chdir(original_cwd)
 
-    def test_json_graph_file_with_nested_path(self):
-        """--json-graph-file with nested path should create parent dirs."""
+    def test_export_graph_json_with_nested_path(self):
+        """--export-graph with a nested .json path should create parent dirs."""
         json_path = str(self.tmproot / "output" / "graphs" / "deps.json")
 
         original_cwd = os.getcwd()
         try:
             os.chdir(str(self.tmproot))
             result = subprocess.run(
-                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--json-graph", "--json-graph-file", json_path],
+                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--export-graph", json_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -87,9 +85,30 @@ endmodule
         finally:
             os.chdir(original_cwd)
 
-    def test_dot_export_graph_only_mode(self):
-        """--export-dot with existing graph should read from JSON (graph-only mode)."""
-        # First generate graph.json
+    def test_export_graph_json_and_dot_in_one_run(self):
+        """A single --export-graph per format, repeated, writes both files from one scan."""
+        json_path = str(self.tmproot / "graph.json")
+        dot_path = str(self.tmproot / "graph.dot")
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(str(self.tmproot))
+            result = subprocess.run(
+                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v",
+                 "--export-graph", json_path, "--export-graph", dot_path],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+            self.assertTrue(os.path.exists(json_path))
+            self.assertTrue(os.path.exists(dot_path))
+        finally:
+            os.chdir(original_cwd)
+
+    def test_from_graph_converts_without_rescanning(self):
+        """--from-graph should convert an existing JSON graph to DOT without scanning source."""
         json_path = str(self.tmproot / "graph.json")
         dot_path = str(self.tmproot / "output.dot")
 
@@ -97,9 +116,9 @@ endmodule
         try:
             os.chdir(str(self.tmproot))
 
-            # Step 1: Generate JSON graph
+            # Step 1: Generate JSON graph from a real scan.
             result1 = subprocess.run(
-                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--json-graph", "--json-graph-file", json_path],
+                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--export-graph", json_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -107,9 +126,9 @@ endmodule
             self.assertEqual(result1.returncode, 0)
             self.assertTrue(os.path.exists(json_path))
 
-            # Step 2: Export to DOT from JSON (no scanning)
+            # Step 2: Convert JSON -> DOT via --from-graph, no -d/-f at all.
             result2 = subprocess.run(
-                [sys.executable, "-m", "rtl_aid.cli", "--json-graph-file", json_path, "--export-dot", dot_path],
+                [sys.executable, "-m", "rtl_aid.cli", "--from-graph", json_path, "--export-graph", dot_path],
                 capture_output=True,
                 text=True,
                 timeout=10
@@ -117,6 +136,105 @@ endmodule
 
             self.assertEqual(result2.returncode, 0, f"stderr: {result2.stderr}")
             self.assertTrue(os.path.exists(dot_path))
+        finally:
+            os.chdir(original_cwd)
+
+    def test_from_graph_ignores_config_dir_no_rescan(self):
+        """Regression test: --from-graph must convert without rescanning, even when
+        the project's .rtl-aidrc.yml sets 'dir' (the bug that made the old
+        --json-graph-file/--export-dot graph-only shortcut unreachable in real
+        projects, since it only fired when neither dir nor file was configured)."""
+        json_path = str(self.tmproot / "graph.json")
+        dot_path = str(self.tmproot / "output.dot")
+
+        (self.tmproot / ".rtl-aidrc.yml").write_text(f"""
+rtldoc:
+  dir:
+    - src/
+  out: docs/
+""")
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(str(self.tmproot))
+
+            # Seed a graph.json to convert (independent of the config's dir).
+            with open(json_path, "w") as f:
+                f.write('{"top": {"calls": ["sub_mod"], "called_by": []}, "sub_mod": {"calls": [], "called_by": ["top"]}}')
+
+            result = subprocess.run(
+                [sys.executable, "-m", "rtl_aid.cli", "--from-graph", json_path, "--export-graph", dot_path],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+            self.assertTrue(os.path.exists(dot_path))
+            # No rescan happened: config's out dir was never created/written to.
+            self.assertFalse(os.path.exists(self.tmproot / "docs"))
+        finally:
+            os.chdir(original_cwd)
+
+    def test_export_graph_only_config_value_takes_effect(self):
+        """Regression test: export_graph set only in .rtl-aidrc.yml (no CLI flag)
+        must actually produce the file — previously the normal run path read
+        args.export_dot directly instead of the merged config+CLI value, so a
+        config-only setting was silently ignored."""
+        (self.tmproot / ".rtl-aidrc.yml").write_text("""
+rtldoc:
+  dir:
+    - src/
+  out: docs/
+  export_graph:
+    - graph.dot
+""")
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(str(self.tmproot))
+            result = subprocess.run(
+                [sys.executable, "-m", "rtl_aid.cli"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+
+            self.assertEqual(result.returncode, 0, f"stderr: {result.stderr}")
+            # Bare filename with no CLI flag involved -> resolved into out dir.
+            self.assertTrue(os.path.exists(self.tmproot / "docs" / "graph.dot"))
+        finally:
+            os.chdir(original_cwd)
+
+    def test_from_graph_with_dir_flag_errors(self):
+        """--from-graph combined with -d should error clearly (ambiguous request)."""
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(str(self.tmproot))
+            result = subprocess.run(
+                [sys.executable, "-m", "rtl_aid.cli", "--from-graph", "graph.json",
+                 "-d", "src/", "--export-graph", "graph.dot"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            self.assertNotEqual(result.returncode, 0)
+        finally:
+            os.chdir(original_cwd)
+
+    def test_export_graph_bad_extension_errors(self):
+        """--export-graph with an unsupported extension should error clearly."""
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(str(self.tmproot))
+            result = subprocess.run(
+                [sys.executable, "-m", "rtl_aid.cli", "-f", "src/top.v", "--export-graph", "graph.txt"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(".json", result.stderr + result.stdout)
         finally:
             os.chdir(original_cwd)
 

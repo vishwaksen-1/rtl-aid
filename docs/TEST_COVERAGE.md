@@ -1,10 +1,10 @@
 # Test Coverage Reference
 
-Quick lookup guide showing which tests cover which features. Total: **254 tests** across 4 directories (121 core + 43 lint + 80 config + 10 integration).
+Quick lookup guide showing which tests cover which features. Total: **276 tests** across 4 directories (119 core + 43 lint + 104 config + 10 integration), per `python -m unittest discover -s tests -p 'test_*.py'`.
 
 ---
 
-## Core Features (`tests/core/`) — 121 tests
+## Core Features (`tests/core/`) — 119 tests
 
 ### `test_parsing.py` — 2 tests
 **Port/parameter parsing and module dependency extraction**
@@ -29,16 +29,17 @@ Quick lookup guide showing which tests cover which features. Total: **254 tests*
 - `TestPortWidthsWithSpaces` (7): v0.2.3 regression — `[15 : 0]` width specifications with spaces
 - `TestShuffledPortOrdering` (9): Interleaved input/output/inout declarations
 
-### `test_json_graph_dir.py` — 15 tests
-**JSON graph export with custom output directory**
-- `TestJsonGraphDefaultBehavior` (4): Default output dir, flag combinations, file validation
-- `TestJsonGraphFileParameter` (4): Custom file path, directory creation, idempotency
-- `TestJsonGraphFileDryRun` (2): Dry-run mode (no file writes)
-- `TestJsonGraphFileEdgeCases` (5): Empty graphs, absolute paths, structure preservation
-
-### `test_export_dot.py` — 11 tests
-**Graphviz DOT export for dependency graphs**
-- `TestExportDot` (11): File creation, Graphviz syntax, node/edge inclusion, JSON→DOT conversion, nested directory creation, circular dependency handling (A→B→A)
+### `test_export_graph.py` — 26 tests
+**Unified `--export-graph`/`--from-graph` dependency graph export** (replaces the old `test_json_graph_dir.py` + `test_export_dot.py`; format is inferred per-target from its `.json`/`.dot` extension)
+- `TestNoTargets` (2): No targets configured → nothing written
+- `TestBareFilenameResolvesToOutDir` (3): A target with no directory component lands in `out_dir`
+- `TestExplicitPathTarget` (6): Custom path used as-is, parent dir creation, absolute paths, trailing-slash normalization, overwrite on repeat
+- `TestMultipleTargets` (1): One call, multiple targets, independent formats (`.json` + `.dot` together)
+- `TestDotContent` (5): Graphviz syntax, node/edge inclusion, empty graph, circular dependency handling (A→B→A)
+- `TestJsonContent` (3): Valid JSON dict, empty graph, structure preservation
+- `TestDryRun` (3): No file writes in dry-run mode (bare, explicit, and custom-path targets)
+- `TestGraphOverrideParam` (2): The `graph=` override param (used by `--from-graph`'s standalone conversion) bypasses `self.modules`
+- `TestBadExtension` (1): Unsupported extension raises `ValueError`
 
 ### `test_builtin_functions.py` — 39 tests (Tier 2)
 **SystemVerilog built-in function evaluation and configuration**
@@ -89,7 +90,7 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 
 ---
 
-## Config Features (`tests/config/`) — 80 tests (Tier 2)
+## Config Features (`tests/config/`) — 104 tests (Tier 2)
 
 ### `test_config_discovery.py` — 8 tests
 **Config file discovery and upward search**
@@ -101,9 +102,9 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 - `TestConfigFileParsing` (6): rtldoc section, rtllint section, empty file, malformed YAML, combined sections, type coercion
 - `TestConfigValidation` (10): Type validation (dir list, out string, verbose int/bool, ci bool), invalid types error, unknown options, mutually exclusive options
 
-### `test_config_precedence.py` — 12 tests
+### `test_config_precedence.py` — 14 tests
 **CLI args override config file**
-- `TestConfigPrecedence` (12): CLI overrides for all options (dir, out, verbose, ci, exclude, json_graph, dry_run), config defaults when CLI not set, mutually exclusive handling
+- `TestConfigPrecedence` (14): CLI overrides for all options (dir, out, verbose, ci, exclude, export_graph, from_graph, dry_run), config defaults when CLI not set, mutually exclusive handling
 
 ### `test_init_workflow_config.py` — 20 tests
 **--init-workflow generates config files**
@@ -118,11 +119,11 @@ Functions defined in YAML with inline Python expressions or reference to `sv_bui
 - `TestConfigSearchUpward` (3): Deep subdirectory search, prefer nearest, stop at first
 - `TestConfigErrorHandling` (3): Malformed YAML errors, invalid types, missing --config errors
 
-### `test_cli_edge_cases.py` — 10 tests (NEW)
+### `test_cli_edge_cases.py` — 15 tests
 **CLI and config edge cases discovered during real-world testing**
-- `TestDotExportCLI` (4): Nested output paths (parent dir creation), absolute paths, JSON→DOT graph-only mode
+- `TestGraphExportCLI` (9): `--export-graph` nested/absolute paths, multiple targets in one run, `--from-graph` standalone conversion (including the regression case: converting without rescanning even when the config sets `dir`), config-only `export_graph` taking effect, `--from-graph` + `-d` erroring, bad extension erroring
 - `TestConfigWithSpecialPaths` (3): Paths with spaces, relative output dir resolution, absolute paths unchanged
-- `TestConfigMergingPrecedence` (4): CLI dir/out overrides config, config used without CLI args, merged behavior
+- `TestConfigMergingPrecedence` (3): CLI dir/out overrides config, config used without CLI args
 
 ### `test_functions_config.py` — 5 tests
 **Custom functions configuration integration**

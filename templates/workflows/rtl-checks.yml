@@ -17,7 +17,7 @@ jobs:
       - name: Install rtl-aid
         run: pip install rtl-aid
       - name: Generate RTL documentation
-        run: rtldoc -d . -o docs/modules --ci --json-graph
+        run: rtldoc -d . -o docs/modules --ci --export-graph graph.json
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         if: always()

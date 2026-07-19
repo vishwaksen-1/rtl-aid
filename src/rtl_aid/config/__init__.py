@@ -93,7 +93,7 @@ def parse_config(filepath: str) -> Dict[str, Any]:
         raise ConfigError(f"Config file must contain a YAML dict, got {type(content).__name__}")
 
     # Coerce single strings to lists for known list options
-    LIST_OPTIONS_RTLDOC = {"dir", "file", "exclude"}
+    LIST_OPTIONS_RTLDOC = {"dir", "file", "exclude", "export_graph"}
     LIST_OPTIONS_RTLLINT = {"file", "include"}
 
     if "rtldoc" in content and isinstance(content["rtldoc"], dict):
@@ -126,9 +126,8 @@ def validate_config(config: Dict[str, Any]) -> None:
         "verbose": (int, bool),
         "ci": (bool,),
         "print_errors": (bool,),
-        "json_graph": (bool,),
-        "json_graph_file": (str, type(None)),
-        "export_dot": (str, type(None)),
+        "export_graph": (list, str),  # Can be list or single string (coerced)
+        "from_graph": (str, type(None)),
         "exclude": (list, str),  # Can be list or single string (coerced)
         "dry_run": (bool,),
         "functions_config": (str, type(None)),

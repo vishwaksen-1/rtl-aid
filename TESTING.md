@@ -16,7 +16,7 @@ tests/
 │   ├── test_gaps.py           # Custom lint rules
 │   ├── test_ci.py             # CI mode behavior
 │   ├── test_markdown.py        # Markdown generation
-│   └── test_json_graph_dir.py # --json-graph-dir feature
+│   └── test_export_graph.py   # --export-graph / --from-graph feature
 ├── lint/                      # Lint feature tests
 │   ├── fixtures/             # Test data files for lint
 │   ├── test_parse_output.py    # Verilator output parsing
@@ -38,14 +38,15 @@ python -m unittest discover -s tests -p 'test_*.py'
 
 **By module:**
 ```bash
-python -m unittest tests.test_core      # All core tests (43 tests)
-python -m unittest tests.test_lint      # All lint tests (129 tests)
-python -m unittest tests.integration.test_features_e2e  # Integration tests (9 tests)
+python -m unittest tests.test_core      # All core tests (80 tests)
+python -m unittest tests.test_lint      # All lint tests (43 tests)
+python -m unittest tests.test_config    # All config tests (67 tests)
+python -m unittest tests.integration.test_features_e2e  # Integration tests (10 tests)
 ```
 
 **Specific test class:**
 ```bash
-python -m unittest tests.core.test_json_graph_dir.TestJsonGraphDirParameter -v
+python -m unittest tests.core.test_export_graph.TestExplicitPathTarget -v
 ```
 
 **Specific test:**
@@ -79,17 +80,17 @@ tag_file(path, ...)
 ### Unit Tests (Feature-focused)
 Focus on a single behavior. Example:
 ```python
-def test_json_graph_dir_creates_directory_if_not_exists(self):
-    """--json-graph-dir should create directory if it doesn't exist."""
+def test_creates_parent_directories(self):
+    """export_graphs should create parent directories for a nested target path."""
     # Test only: directory creation for non-existent paths
 ```
 
 ### Integration Tests (Cross-module E2E)
 Verify features work end-to-end with real file I/O. Located in `tests/integration/`:
 ```python
-def test_custom_dir_writes_only_to_custom(self):
-    """With --json-graph-dir, graph.json goes only to custom directory."""
-    # Verify full feature works: CLI arg → VerilogWikiParser → write_json → file I/O
+def test_custom_file_writes_to_specified_file(self):
+    """A target with a directory component goes to that exact file, not out_dir."""
+    # Verify full feature works: CLI arg → VerilogWikiParser → export_graphs → file I/O
 ```
 
 ### Testing Philosophy
@@ -125,30 +126,16 @@ class TestFeatureName(unittest.TestCase):
         # Assert
 ```
 
-## Test Count Summary (v0.2.8)
+## Test Count Summary
 
-- **Core tests:** 121 (49 new: markdown output handling, DOT parent dirs, circular deps, large ports)
-- **Lint tests:** 43 (unchanged)
-- **Config tests:** 80 (70 existing + 10 new: CLI edge cases, nested paths, special characters)
-- **Integration tests:** 10 (unchanged)
-- **Total:** 254 tests
+- **Core tests:** 80
+- **Lint tests:** 43
+- **Config tests:** 67
+- **Integration tests:** 10
+- **Total:** 200 tests
 
-### v0.2.8 Additions
+### Graph export: `--json-graph`/`--json-graph-file`/`--export-dot` → `--export-graph`/`--from-graph`
 
-**Edge Case Tests** (`tests/config/test_cli_edge_cases.py` — 10 new)
-- DOT/JSON export with nested output paths (parent dir auto-creation)
-- Paths with spaces in directory names
-- Mixed absolute/relative paths in config
-- Graph-only export mode (--json-graph-file + --export-dot without rescanning)
+The old three-flag graph-export surface (`--json-graph`, `--json-graph-file`, `--export-dot`, plus `VerilogWikiParser.write_json()`/`export_dot()`/`export_dot_from_file()`) was replaced by a single `--export-graph FILE` flag (repeatable, format inferred from `.json`/`.dot` extension) backed by one `export_graphs(out_dir, graph=None)` method, plus `--from-graph FILE` for standalone JSON→format conversion without rescanning. This fixed two bugs: a config-only `export_dot`/`json_graph_file` value being silently ignored (the CLI read raw `args.*` instead of the merged config+CLI dict), and the old graph-only shortcut being unreachable whenever a project's config set `dir` for normal doc generation.
 
-**Markdown Enhancements** (`tests/core/test_markdown.py` — 3 new)
-- Nested output directory creation
-- Dry-run mode (verify no files written)
-- Large port lists (50+ ports) without truncation
-
-**DOT Export Enhancements** (`tests/core/test_export_dot.py` — 2 new)
-- Parent directory creation for nested output paths
-- Circular dependency handling (A→B→A without infinite loops)
-
-### Bug Fixed in v0.2.8
-**DOT Export missing parent directory creation** — Added `os.makedirs()` before file writes in `export_dot()` and `export_dot_from_file()` (src/rtl_aid/core.py lines 565, 583). Resolves FileNotFoundError when using nested output paths like `--export-dot output/nested/graph.dot`.
+`tests/core/test_export_dot.py` and `tests/core/test_json_graph_dir.py` were consolidated into `tests/core/test_export_graph.py`. Regression coverage for both bugs lives in `tests/config/test_cli_edge_cases.py` (`TestGraphExportCLI`), which drives the CLI via subprocess.

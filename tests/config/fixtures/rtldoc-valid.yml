@@ -9,6 +9,7 @@ rtldoc:
   exclude:
     - src/testbench/
     - src/sim/
-  json_graph: true
-  json_graph_file: docs/graph.json
+  export_graph:
+    - docs/graph.json
+    - docs/graph.dot
   dry_run: false

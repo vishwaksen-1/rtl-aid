@@ -2,6 +2,7 @@ import argparse
 import os
 import sys
 import glob
+import json
 from importlib import resources
 from . import __version__
 from .core import VerilogWikiParser
@@ -129,7 +130,13 @@ def main():
         metavar="FILE",
         help="One or more specific Verilog files to parse (no directory traversal)"
     )
-    
+
+    group.add_argument(
+        "--from-graph",
+        metavar="FILE",
+        help="Skip scanning; load an existing JSON graph from FILE and write it via --export-graph target(s)"
+    )
+
     parser.add_argument(
         "-o", "--out",
         default="temp/docs/modules",
@@ -157,21 +164,12 @@ def main():
     )
     
     parser.add_argument(
-        "--json-graph",
-        action="store_true",
-        help="Generate dependency graph as JSON"
-    )
-
-    parser.add_argument(
-        "--json-graph-file",
+        "--export-graph",
+        action="append",
         metavar="FILE",
-        help="JSON file to write/update graph to (used with --json-graph; creates/updates FILE)"
-    )
-
-    parser.add_argument(
-        "--export-dot",
-        metavar="FILE",
-        help="Export dependency graph as Graphviz DOT file"
+        help="Export the dependency graph to FILE. Format is inferred from the "
+             "extension (.json or .dot). Repeatable. A bare filename with no "
+             "directory component is written inside the output directory."
     )
 
     parser.add_argument(
@@ -192,6 +190,14 @@ def main():
     if args.init_workflow:
         init_workflow(".")
         sys.exit(0)
+
+    # Validate --export-graph / --from-graph extensions up front, before any
+    # config loading or scanning — fail fast on an unsupported format.
+    for target in args.export_graph or []:
+        if os.path.splitext(target)[1].lower() not in (".json", ".dot"):
+            parser.error(f"--export-graph: unsupported extension in {target!r} (use .json or .dot)")
+    if args.from_graph and os.path.splitext(args.from_graph)[1].lower() != ".json":
+        parser.error(f"--from-graph: expected a .json file, got {args.from_graph!r}")
 
     # Load config file if present
     full_config = {}
@@ -215,28 +221,56 @@ def main():
         "v": args.v,
         "ci": args.ci,
         "print_errors": args.print_errors,
-        "json_graph": args.json_graph,
-        "json_graph_file": args.json_graph_file,
-        "export_dot": args.export_dot,
+        "export_graph": args.export_graph,
+        "from_graph": args.from_graph,
         "exclude": args.exclude,
         "dry_run": args.dry_run,
     }
 
     merged = merge_config_with_args(full_config, cli_args, "rtldoc")
 
-    # Handle graph-only mode: load existing graph.json and export to DOT
-    if merged.get("json_graph_file") and merged.get("export_dot") and not merged.get("dir") and not merged.get("file"):
+    # Standalone conversion mode: --from-graph explicitly requests skipping
+    # the scan entirely. This is the whole point of the flag — a project's
+    # config file will typically set 'dir' for normal doc-gen runs, and
+    # --from-graph on the CLI must still short-circuit scanning without
+    # requiring the user to edit or omit their config. (The only case that
+    # can't happen is -d/-f *on the CLI* alongside --from-graph — argparse's
+    # mutually-exclusive group already rejects that combination.)
+    if merged.get("from_graph"):
+        export_targets = merged.get("export_graph") or []
+        if not export_targets:
+            parser.error("--from-graph requires at least one --export-graph target")
+
+        from_graph = merged.get("from_graph")
+        if config_file_dir and not os.path.isabs(from_graph):
+            from_graph = os.path.join(config_file_dir, from_graph)
+
+        try:
+            with open(from_graph, "r") as f:
+                graph = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: {from_graph} not found", file=sys.stderr)
+            sys.exit(1)
+        except json.JSONDecodeError:
+            print(f"Error: {from_graph} is not valid JSON", file=sys.stderr)
+            sys.exit(1)
+
+        out = merged.get("out", "temp/docs/modules")
+        if config_file_dir and not os.path.isabs(out):
+            out = os.path.join(config_file_dir, out)
+
         v = VerilogWikiParser(
             [],
             verbose=merged.get("verbose", 0),
             ci=False,
-            json_graph=False,
-            json_graph_file=merged.get("json_graph_file"),
+            export_graph=export_targets,
             print_errors=merged.get("print_errors", False),
             exclude=merged.get("exclude"),
             dry_run=merged.get("dry_run", False),
         )
-        v.export_dot_from_file(merged.get("json_graph_file"), merged.get("export_dot"))
+        v.export_graphs(out, graph=graph)
+        for target in export_targets:
+            print(f"Exported graph to {v._resolve_export_path(target, out)}")
         return
 
     # Require dir or file from either CLI or config
@@ -257,17 +291,14 @@ def main():
         paths,
         verbose=merged.get("verbose", 0),
         ci=merged.get("ci", False),
-        json_graph=merged.get("json_graph", False),
-        json_graph_file=merged.get("json_graph_file"),
+        export_graph=merged.get("export_graph"),
         print_errors=merged.get("print_errors", False),
         exclude=merged.get("exclude"),
         dry_run=merged.get("dry_run", False),
     )
     v.scan()
     v.generate_markdown(out)
-    v.write_json(args.out)
-    if args.export_dot:
-        v.export_dot(args.export_dot)
+    v.export_graphs(out)
     v.write_log()
     v.run_ci_checks()
 

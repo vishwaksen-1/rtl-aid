@@ -88,9 +88,8 @@ rtldoc:
             "verbose": 0,
             "ci": False,
             "exclude": None,
-            "json_graph": False,
-            "json_graph_file": None,
-            "export_dot": None,
+            "export_graph": None,
+            "from_graph": None,
             "dry_run": False,
             "print_errors": False,
         }
@@ -134,8 +133,9 @@ rtldoc:
   verbose: 1
   ci: true
   print_errors: true
-  json_graph: true
-  json_graph_file: docs/graph.json
+  export_graph:
+    - docs/graph.json
+    - docs/graph.dot
   exclude:
     - testbench/
   dry_run: false
@@ -155,8 +155,7 @@ rtldoc:
             self.assertEqual(config["rtldoc"]["verbose"], 1)
             self.assertTrue(config["rtldoc"]["ci"])
             self.assertTrue(config["rtldoc"]["print_errors"])
-            self.assertTrue(config["rtldoc"]["json_graph"])
-            self.assertEqual(config["rtldoc"]["json_graph_file"], "docs/graph.json")
+            self.assertEqual(config["rtldoc"]["export_graph"], ["docs/graph.json", "docs/graph.dot"])
             self.assertEqual(config["rtldoc"]["exclude"], ["testbench/"])
             self.assertFalse(config["rtldoc"]["dry_run"])
         finally:

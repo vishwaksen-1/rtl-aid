@@ -2,7 +2,6 @@
 import unittest
 import tempfile
 import subprocess
-import os
 import sys
 from pathlib import Path
 
@@ -17,13 +16,10 @@ class TestInitWorkflowGeneratesConfig(unittest.TestCase):
 
     def test_init_workflow_creates_config_file(self):
         """--init-workflow should create .rtl-aidrc.yml alongside workflow."""
-        # Arrange
-        os.chdir(str(self.tmproot))
-
         # Act
-        from rtl_aid.cli import main
-        # Simulate: rtldoc --init-workflow
-        # This will need to be called differently in actual implementation
+        # _run_rtldoc_init_workflow() chdirs into tmproot and restores cwd
+        # afterward — do not chdir here too, it left cwd stranded inside a
+        # tmpdir that addCleanup then deletes, corrupting every later test.
         result = self._run_rtldoc_init_workflow()
 
         # Assert

@@ -42,9 +42,8 @@ rtldoc [--config FILE] (-d DIR [DIR...] | -f FILE [FILE...]) [-o OUT_DIR] [flags
 | `--dry-run` | Show what would change, write nothing |
 | `--ci` | Exit 1 if missing descriptions, no-IO modules, or self-instantiation |
 | `--print-errors` | Print CI failures to stdout |
-| `--json-graph` | Write dependency graph to `OUT_DIR/graph.json` |
-| `--json-graph-file FILE` | Write graph to FILE instead of `OUT_DIR/graph.json` |
-| `--export-dot FILE` | Export dependency graph as Graphviz DOT file |
+| `--export-graph FILE` | Export dependency graph to FILE (repeatable). Format inferred from extension: `.json` or `.dot` |
+| `--from-graph FILE` | Skip scanning; load an existing JSON graph from FILE and write it via `--export-graph` target(s) |
 | `--exclude STR` | Skip paths containing STR |
 | `-v` / `-vv` | Verbose: file list / file list + section diffs |
 
@@ -57,7 +56,7 @@ rtldoc [--config FILE] (-d DIR [DIR...] | -f FILE [FILE...]) [-o OUT_DIR] [flags
 - Parameters resolve simple integer arithmetic and common SV built-ins (`$clog2`, `$bits`, `$size`, `$high`) alongside the raw expression: `DERIVED = BASE * 2  (= 8)`. Unresolvable expressions are marked `(unresolved)`, never guessed. `localparam` entries are included, suffixed `(localparam)`.
 - Any extra sections you add manually (e.g. `## State Machine`) are left alone.
 
-**graph.json** (with `--json-graph` / `--json-graph-file`):
+**graph.json** (with `--export-graph FILE`, where FILE ends in `.json`):
 
 ```json
 {
@@ -68,11 +67,15 @@ rtldoc [--config FILE] (-d DIR [DIR...] | -f FILE [FILE...]) [-o OUT_DIR] [flags
 }
 ```
 
-**Graphviz DOT** (with `--export-dot FILE`): renderable with `dot -Tsvg graph.dot -o graph.svg`. Graph-only mode — convert an existing `graph.json` without rescanning source:
+A bare filename with no directory component (e.g. `--export-graph graph.json`) is written inside the output directory; a path with a directory component (e.g. `--export-graph custom/deps.json`) is used as given. Pass `--export-graph` multiple times to write more than one format from a single scan.
+
+**Graphviz DOT** (with `--export-graph FILE`, where FILE ends in `.dot`): renderable with `dot -Tsvg graph.dot -o graph.svg`. Standalone conversion mode — convert an existing `graph.json` to DOT **without rescanning source**, via `--from-graph`:
 
 ```bash
-rtldoc --json-graph-file graph.json --export-dot graph.dot
+rtldoc --from-graph graph.json --export-graph graph.dot
 ```
+
+`--from-graph` skips scanning entirely — it works even when the project's `.rtl-aidrc.yml` sets `dir`/`file` for normal doc-gen runs; those are ignored in this mode.
 
 **stdout summary** (always): `N module(s) processed — M doc(s) written, K unchanged`.
 
@@ -95,7 +98,9 @@ rtldoc:
   out: docs/modules      # Resolved relative to config file directory
   verbose: 0
   ci: false
-  json_graph: false
+  export_graph:
+    - graph.json
+    - graph.dot
   exclude:
     - testbench/
     - _tb.v
@@ -130,9 +135,10 @@ The project docs typically live in `docs/modules`. When using config, set `out: 
 | Single file added or modified | `rtldoc -f rtl/path/to/file.v -o docs/modules` |
 | Multiple files modified | `rtldoc -f rtl/a.v rtl/b.v -o docs/modules` |
 | Full rescan (e.g. after a refactor that touches many files) | `rtldoc -d rtl/ -o docs/modules` |
-| Also regenerate the dependency graph | add `--json-graph` |
-| Export graph as Graphviz DOT | add `--export-dot graph.dot` |
-| Custom graph output location | add `--json-graph-file custom/path/graph.json` |
+| Also regenerate the dependency graph | add `--export-graph graph.json` |
+| Export graph as Graphviz DOT | add `--export-graph graph.dot` (repeat the flag to get both formats) |
+| Custom graph output location | add `--export-graph custom/path/graph.json` |
+| Convert an existing graph.json to DOT without rescanning | `rtldoc --from-graph docs/graph.json --export-graph docs/graph.dot` |
 | Preview without writing anything | add `--dry-run` |
 | See which files changed | add `-v` |
 | See which sections changed within each file | add `-vv` |
@@ -231,7 +237,7 @@ source .venv/bin/activate
 rtllint rtl/path/to/new_module.v
 
 # 2. Generate its doc (also rebuild graph so new module appears)
-rtldoc -f rtl/path/to/new_module.v -o docs/modules --json-graph -vv
+rtldoc -f rtl/path/to/new_module.v -o docs/modules --export-graph graph.json -vv
 
 # 3. Open the generated doc and write the Description section
 # docs/modules/new_module.md  →  replace "TODO: Add description" with real text
@@ -241,7 +247,7 @@ rtldoc -f rtl/path/to/new_module.v -o docs/modules --json-graph -vv
 
 Understand a codebase without reading source:
 ```bash
-rtldoc -d rtl/ -o .agent/docs/ --json-graph
+rtldoc -d rtl/ -o .agent/docs/ --export-graph graph.json
 ```
 Then read `.agent/docs/<module>.md` for any module and `graph.json` for the full dependency map.
 

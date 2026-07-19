@@ -32,7 +32,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the full module/test layout and how the pieces 
 
 - `src/rtl_aid/` — `core.py` (doc/graph generation), `lint.py` (rtllint), `cli.py` (entry points + config merge), `config/` (`.rtl-aidrc.yml` handling), `functions.py`/`sv_builtin_functions.py` (SV built-in function resolution), `templates/` (`--init-workflow` scaffolding)
 - `tests/` — `core/`, `lint/`, `config/`, `integration/`, mirroring the modules above; see `TESTING.md` for how to run them
-- `docs/graph_schema.json` — JSON schema for `--json-graph` output
+- `docs/graph_schema.json` — JSON schema for `--export-graph <file>.json` output
 - `examples/USB4-project/` — real-world Verilog/SV example project
 
 ---

@@ -31,9 +31,8 @@ rtldoc:
             "verbose": 0,
             "ci": False,
             "exclude": None,
-            "json_graph": False,
-            "json_graph_file": None,
-            "export_dot": None,
+            "export_graph": None,
+            "from_graph": None,
             "dry_run": False,
             "print_errors": False,
         }
@@ -106,20 +105,46 @@ rtldoc:
         # Assert
         self.assertEqual(merged["exclude"], ["cli_exclude/"])
 
-    def test_cli_json_graph_overrides_config(self):
-        """CLI --json-graph should override config rtldoc.json_graph."""
+    def test_cli_export_graph_overrides_config(self):
+        """CLI --export-graph should override config rtldoc.export_graph."""
         # Arrange
-        cli_args = {"json_graph": True}
-        config = {"rtldoc": {"json_graph": False}}
+        cli_args = {"export_graph": ["cli_graph.dot"]}
+        config = {"rtldoc": {"export_graph": ["config_graph.json"]}}
 
         # Act
         from rtl_aid.config import merge_config_with_args
         merged = merge_config_with_args(
-            config, cli_args, "rtldoc", ["json_graph"]
+            config, cli_args, "rtldoc", ["export_graph"]
         )
 
         # Assert
-        self.assertTrue(merged["json_graph"])
+        self.assertEqual(merged["export_graph"], ["cli_graph.dot"])
+
+    def test_config_export_graph_used_when_cli_not_set(self):
+        """Config rtldoc.export_graph should apply when CLI doesn't set it."""
+        # Arrange
+        cli_args = {"export_graph": None}
+        config = {"rtldoc": {"export_graph": ["config_graph.json"]}}
+
+        # Act
+        from rtl_aid.config import merge_config_with_args
+        merged = merge_config_with_args(config, cli_args, "rtldoc")
+
+        # Assert
+        self.assertEqual(merged["export_graph"], ["config_graph.json"])
+
+    def test_cli_from_graph_overrides_config(self):
+        """CLI --from-graph should override config rtldoc.from_graph."""
+        # Arrange
+        cli_args = {"from_graph": "cli_graph.json"}
+        config = {"rtldoc": {"from_graph": "config_graph.json"}}
+
+        # Act
+        from rtl_aid.config import merge_config_with_args
+        merged = merge_config_with_args(config, cli_args, "rtldoc", ["from_graph"])
+
+        # Assert
+        self.assertEqual(merged["from_graph"], "cli_graph.json")
 
     def test_cli_dry_run_overrides_config(self):
         """CLI --dry-run should override config rtldoc.dry_run."""
@@ -146,9 +171,8 @@ rtldoc:
             "verbose": 0,
             "ci": False,
             "exclude": None,
-            "json_graph": False,
-            "json_graph_file": None,
-            "export_dot": None,
+            "export_graph": None,
+            "from_graph": None,
             "dry_run": False,
             "print_errors": False,
         }

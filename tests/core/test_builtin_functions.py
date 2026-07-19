@@ -414,11 +414,10 @@ class TestFunctionConfigIntegration(unittest.TestCase):
         parser = VerilogWikiParser(
             paths=[self.basic_dir],
             verbose=0,
-            json_graph=True,
-            json_graph_file=json_file
+            export_graph=[json_file]
         )
         parser.scan()
-        parser.write_json(self.tmpdir.name)
+        parser.export_graphs(self.tmpdir.name)
 
         self.assertTrue(os.path.exists(json_file))
 

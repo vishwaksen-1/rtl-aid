@@ -30,19 +30,20 @@ rtldoc:
   # Print error messages to stdout (in addition to error log file)
   print_errors: false
 
-  # Generate dependency graph as JSON
-  json_graph: false
-
-  # File path to write/update JSON graph to
-  # json_graph_file: docs/graph.json
+  # Export the dependency graph. Format inferred per-target from its extension
+  # (.json or .dot). Bare filenames (no directory) land inside 'out'.
+  # export_graph:
+  #   - graph.json
+  #   - graph.dot
 
   # Directories or patterns to exclude from scanning
   # exclude:
   #   - src/testbench/
   #   - src/sim/
 
-  # Print errors for export_dot handling (optional)
-  # export_dot: docs/graph.dot
+  # Skip scanning entirely; convert an existing JSON graph via export_graph
+  # above instead. Mutually exclusive with 'dir'/'file'.
+  # from_graph: docs/graph.json
 
   # Custom functions configuration for parameter evaluation (optional)
   # Uses packaged functions.yaml by default; override to add custom $functions

@@ -52,15 +52,14 @@ def _eval_ast_node(node):
 
 
 class VerilogWikiParser(object):
-    def __init__(self, paths, verbose=0, ci=False, json_graph=False, json_graph_file=None, print_errors=False, exclude=None, dry_run=False, functions_config=None):
+    def __init__(self, paths, verbose=0, ci=False, export_graph=None, print_errors=False, exclude=None, dry_run=False, functions_config=None):
         self.paths = paths
         self.modules = {}
         self.called_by = {}
         self.modified_files = []
         self.verbose = verbose
         self.ci = ci
-        self.json_graph = json_graph
-        self.json_graph_file = json_graph_file
+        self.export_graph = export_graph or []
         self.print_errors = print_errors
         self.exclude = exclude or []
         self.issues = []
@@ -513,33 +512,24 @@ class VerilogWikiParser(object):
                     print(f"  - {m}")
 
     # -------------------------
-    # JSON GRAPH
+    # GRAPH EXPORT
     # -------------------------
-    def write_json(self, out_dir):
-        if not self.json_graph:
-            return
-
+    def _current_graph(self):
+        """Build the {module: {calls, called_by}} graph from parsed modules."""
         graph = {}
         for m, d in self.modules.items():
             graph[m] = {
                 "calls": d["calls"],
                 "called_by": self.called_by.get(m, [])
             }
+        return graph
 
-        # Determine output path: use json_graph_file if set, else create graph.json in out_dir
-        if self.json_graph_file:
-            path = self.json_graph_file.rstrip("/")
-            graph_dir = os.path.dirname(path)
-            if graph_dir and not self.dry_run:
-                os.makedirs(graph_dir, exist_ok=True)
-        else:
-            path = os.path.join(out_dir, "graph.json")
-            if not self.dry_run:
-                os.makedirs(out_dir, exist_ok=True)
-
-        if not self.dry_run:
-            with open(path, "w") as f:
-                json.dump(graph, f, indent=2)
+    def _resolve_export_path(self, path, out_dir):
+        """Strip trailing slashes; bare filenames (no directory part) land in out_dir."""
+        path = path.rstrip("/")
+        if not os.path.dirname(path):
+            return os.path.join(out_dir, path)
+        return path
 
     def _graph_to_dot(self, graph):
         """Convert a dependency graph dict to Graphviz DOT format."""
@@ -552,38 +542,37 @@ class VerilogWikiParser(object):
         lines.append("}")
         return "\n".join(lines)
 
-    def export_dot(self, out_file):
-        """Export current module graph to Graphviz DOT format."""
-        graph = {}
-        for m, d in self.modules.items():
-            graph[m] = {
-                "calls": d["calls"],
-                "called_by": self.called_by.get(m, [])
-            }
-        dot_content = self._graph_to_dot(graph)
-        if not self.dry_run:
-            os.makedirs(os.path.dirname(out_file) or ".", exist_ok=True)
-            with open(out_file, "w") as f:
-                f.write(dot_content)
+    def export_graphs(self, out_dir, graph=None):
+        """Write each configured --export-graph target.
 
-    def export_dot_from_file(self, json_file, dot_file):
-        """Load a graph.json file and export it to Graphviz DOT format."""
-        try:
-            with open(json_file, "r") as f:
-                graph = json.load(f)
-        except FileNotFoundError:
-            print(f"Error: {json_file} not found", file=sys.stderr)
-            sys.exit(1)
-        except json.JSONDecodeError:
-            print(f"Error: {json_file} is not valid JSON", file=sys.stderr)
-            sys.exit(1)
+        Format is inferred per-target from its file extension (.json/.dot).
+        `graph` overrides the in-memory graph built from self.modules — used
+        by --from-graph's standalone conversion mode, where no scan() runs.
+        """
+        if not self.export_graph:
+            return
 
-        dot_content = self._graph_to_dot(graph)
-        if not self.dry_run:
-            os.makedirs(os.path.dirname(dot_file) or ".", exist_ok=True)
-            with open(dot_file, "w") as f:
-                f.write(dot_content)
-        print(f"Exported graph to {dot_file}")
+        graph = graph if graph is not None else self._current_graph()
+
+        for target in self.export_graph:
+            path = self._resolve_export_path(target, out_dir)
+            ext = os.path.splitext(path)[1].lower()
+            if ext not in (".json", ".dot"):
+                raise ValueError(f"Unsupported --export-graph extension: {path} (use .json or .dot)")
+
+            if self.dry_run:
+                continue
+
+            graph_dir = os.path.dirname(path)
+            if graph_dir:
+                os.makedirs(graph_dir, exist_ok=True)
+
+            if ext == ".json":
+                with open(path, "w") as f:
+                    json.dump(graph, f, indent=2)
+            else:
+                with open(path, "w") as f:
+                    f.write(self._graph_to_dot(graph))
 
     # -------------------------
     # CI VALIDATION

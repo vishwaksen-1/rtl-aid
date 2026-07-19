@@ -26,11 +26,11 @@ class TestCiValidation(unittest.TestCase):
         self.assertIn("mod_a: missing description", parser.issues)
 
     def test_json_graph(self):
-        parser = VerilogWikiParser([self.basic_dir], json_graph=True)
+        parser = VerilogWikiParser([self.basic_dir], export_graph=["graph.json"])
         parser.scan()
 
         with tempfile.TemporaryDirectory() as out_dir:
-            parser.write_json(out_dir)
+            parser.export_graphs(out_dir)
 
             graph_path = os.path.join(out_dir, "graph.json")
             self.assertTrue(os.path.exists(graph_path))

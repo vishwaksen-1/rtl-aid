@@ -7,7 +7,7 @@
 ```
 src/rtl_aid/
 ├── cli.py              # CLI: rtldoc, rtllint entry points; config loading + merge
-├── core.py             # VerilogWikiParser (scan, generate_markdown, write_json, export_dot)
+├── core.py             # VerilogWikiParser (scan, generate_markdown, export_graphs)
 ├── lint.py             # Verilator wrapper + custom checks (sensitivity, unlabeled generate)
 ├── config/
 │   ├── __init__.py     # find_config_file, parse_config, validate_config, merge_config_with_args
@@ -36,14 +36,13 @@ The heart of rtldoc. Single class:
 2. `generate_markdown()` — Write module docs
    - Diff-aware: preserves existing Description sections
    - Tracks changes (added/removed ports) for verbose logging
-3. `write_json()` — Export dependency graph as JSON
-   - Only runs if `--json-graph` flag
-   - Writes to `json_graph_file` path (or output_dir/graph.json if unset)
+3. `export_graphs()` — Export dependency graph, one or more formats
+   - Driven by `self.export_graph`, a list of target file paths from `--export-graph` (repeatable)
+   - Format inferred per-target from its extension (`.json` or `.dot`); bad extension raises `ValueError`
+   - Bare filename (no directory component) resolves inside the output dir; otherwise used as given
    - Creates parent directories automatically
-4. `export_dot()` — Export dependency graph as Graphviz DOT
-   - Called via `--export-dot FILE` flag
-   - Can run standalone: read existing graph.json, output DOT (no scanning)
-5. `run_ci_checks()` — Validate module structure
+   - `graph=` param overrides the in-memory graph — used by `--from-graph`'s standalone conversion mode (load existing JSON, skip scanning entirely)
+4. `run_ci_checks()` — Validate module structure
    - Each module must have inputs/outputs (no IO = error)
    - No self-instantiation allowed
 
@@ -133,9 +132,8 @@ Uses regex (no full parser — intentional for simplicity):
 |------|--------|
 | `--config FILE` | Explicit config file path |
 | `--init-workflow` | Scaffold `.rtl-aidrc.yml` + GitHub Actions workflow, then exit |
-| `--json-graph` | Write dependency graph JSON |
-| `--json-graph-file FILE` | Custom path for graph JSON (default: `<out>/graph.json`) |
-| `--export-dot FILE` | Export dependency graph as Graphviz DOT (can run standalone against an existing `graph.json`, no scan needed) |
+| `--export-graph FILE` | Export dependency graph to FILE (repeatable); format inferred from extension (`.json`/`.dot`) |
+| `--from-graph FILE` | Skip scanning; convert an existing JSON graph via `--export-graph` target(s) — works even if the config sets `dir`/`file` |
 | `--exclude PATH...` | Skip paths containing any of these substrings |
 | `--dry-run` | Show what would change without writing files |
 | `--print-errors` | Print CI errors to stdout in addition to the log file |

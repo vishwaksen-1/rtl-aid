@@ -10,7 +10,7 @@ from rtl_aid.lint import tag_file
 
 
 class TestJsonGraphFileFeatureE2E(unittest.TestCase):
-    """End-to-end tests for the --json-graph-file feature."""
+    """End-to-end tests for the --export-graph feature (JSON target)."""
 
     def setUp(self):
         self.tmpdir = tempfile.TemporaryDirectory()
@@ -28,15 +28,14 @@ endmodule
         self.tmpdir.cleanup()
 
     def test_default_writes_to_output_dir(self):
-        """Without --json-graph-file, graph.json goes to output directory."""
+        """A bare 'graph.json' target goes to the output directory."""
         out_dir = os.path.join(self.tmpdir.name, "docs")
         parser = VerilogWikiParser(
             [self.test_file],
-            json_graph=True,
-            json_graph_file=None
+            export_graph=["graph.json"],
         )
         parser.scan()
-        parser.write_json(out_dir)
+        parser.export_graphs(out_dir)
 
         graph_file = os.path.join(out_dir, "graph.json")
         self.assertTrue(os.path.exists(graph_file))
@@ -45,17 +44,16 @@ endmodule
         self.assertIsInstance(data, dict)
 
     def test_custom_file_writes_to_specified_file(self):
-        """With --json-graph-file, graph.json goes to the specified file."""
+        """A target with a directory component goes to that exact file."""
         out_dir = os.path.join(self.tmpdir.name, "docs")
         graph_file = os.path.join(self.tmpdir.name, "custom_graph.json")
 
         parser = VerilogWikiParser(
             [self.test_file],
-            json_graph=True,
-            json_graph_file=graph_file
+            export_graph=[graph_file],
         )
         parser.scan()
-        parser.write_json(out_dir)
+        parser.export_graphs(out_dir)
 
         # Should be at custom file path
         self.assertTrue(os.path.exists(graph_file))
@@ -65,17 +63,16 @@ endmodule
         self.assertFalse(os.path.exists(out_graph))
 
     def test_custom_file_creates_parent_dirs(self):
-        """--json-graph-file should create parent directories if needed."""
+        """--export-graph should create parent directories if needed."""
         out_dir = os.path.join(self.tmpdir.name, "docs")
         graph_file = os.path.join(self.tmpdir.name, "a", "b", "c", "graph.json")
 
         parser = VerilogWikiParser(
             [self.test_file],
-            json_graph=True,
-            json_graph_file=graph_file
+            export_graph=[graph_file],
         )
         parser.scan()
-        parser.write_json(out_dir)
+        parser.export_graphs(out_dir)
 
         self.assertTrue(os.path.exists(graph_file))
 
@@ -86,12 +83,11 @@ endmodule
 
         parser = VerilogWikiParser(
             [self.test_file],
-            json_graph=True,
-            json_graph_file=graph_file,
+            export_graph=[graph_file],
             dry_run=True
         )
         parser.scan()
-        parser.write_json(out_dir)
+        parser.export_graphs(out_dir)
 
         # Neither should exist
         self.assertFalse(os.path.exists(os.path.join(out_dir, "graph.json")))
@@ -234,16 +230,12 @@ endmodule
 
         parser = VerilogWikiParser(
             self.files,
-            json_graph=True,
-            json_graph_file=graph_file,
+            export_graph=[graph_file, dot_file],
         )
         parser.scan()
-        parser.write_json(out_dir)
+        parser.export_graphs(out_dir)
 
         self.assertTrue(os.path.exists(graph_file), "graph.json file created")
-
-        parser.export_dot(dot_file)
-
         self.assertTrue(os.path.exists(dot_file), "DOT file created")
 
         with open(dot_file) as f:
