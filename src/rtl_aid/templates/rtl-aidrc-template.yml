@@ -44,6 +44,10 @@ rtldoc:
   # Print errors for export_dot handling (optional)
   # export_dot: docs/graph.dot
 
+  # Custom functions configuration for parameter evaluation (optional)
+  # Uses packaged functions.yaml by default; override to add custom $functions
+  # functions_config: config/custom-functions.yaml
+
   # Show what would be written without modifying files
   dry_run: false
 

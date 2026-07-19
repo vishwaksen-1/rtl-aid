@@ -1,6 +1,6 @@
 # Test Coverage Reference
 
-Quick lookup guide showing which tests cover which features. Total: **234 tests** across 4 directories.
+Quick lookup guide showing which tests cover which features. Total: **239 tests** across 4 directories (116 core + 43 lint + 70 config + 10 integration).
 
 ---
 
@@ -41,21 +41,22 @@ Quick lookup guide showing which tests cover which features. Total: **234 tests*
 - `TestExportDot` (8): File creation, Graphviz syntax, node/edge inclusion, JSON→DOT conversion
 
 ### `test_builtin_functions.py` — 39 tests (Tier 2)
-**SystemVerilog built-in function evaluation ($clog2, $bits, $size, $high)**
-- `TestFunctionsConfigLoading` (6): Config loading, merging, user overrides, malformed config fallback
-- `TestFunctionEvaluation` (5): $clog2, $bits, $size, $high evaluation with constant arguments
+**SystemVerilog built-in function evaluation and configuration**
+Functions defined in YAML with inline Python expressions or reference to `sv_builtin_functions` module:
+- `TestFunctionsConfigLoading` (6): Packaged config loaded, user overrides merged, malformed config validation
+- `TestFunctionEvaluation` (5): $clog2, $bits, $size, $high evaluation with integer arguments
 - `TestFunctionMarkdownOutput` (3): Display format showing both function and evaluated value
-- `TestFunctionEdgeCases` (8): Zero/large values, non-integer args, undefined params, unresolved fallback
+- `TestFunctionEdgeCases` (8): Zero/large values, non-integer args, undefined params, graceful UNRESOLVED fallback
 - `TestNestedFunctionCalls` (3): Nested evaluation, partial failures, bottom-up resolution
-- `TestFunctionErrorHandling` (3): Missing functions, invalid arguments, graceful degradation
-- `TestMalformedConfigFallback` (2): Config parse errors, invalid YAML
+- `TestFunctionErrorHandling` (3): Missing functions, invalid arguments, error recovery
+- `TestMalformedConfigFallback` (2): Config parse errors, invalid YAML recovery
 - `TestVerbosityLevelWarnings` (3): Warning output at different verbosity levels (-v, -vv)
-- `TestFunctionConfigIntegration` (5): End-to-end workflow, config loading in scan(), markdown generation
-- `TestFunctionDocumentation` (2): Config file format, usage examples
+- `TestFunctionConfigIntegration` (5): End-to-end config loading, parameter resolution in markdown generation
+- `TestFunctionDocumentation` (2): Config file format, usage documentation
 
 ---
 
-## Lint Features (`tests/lint/`) — 47 tests
+## Lint Features (`tests/lint/`) — 43 tests
 
 ### `test_parse_output.py` — 8 tests
 **Verilator output parsing**
@@ -88,7 +89,7 @@ Quick lookup guide showing which tests cover which features. Total: **234 tests*
 
 ---
 
-## Config Features (`tests/config/`) — ~70 tests (Tier 2)
+## Config Features (`tests/config/`) — 70 tests (Tier 2)
 
 ### `test_config_discovery.py` — 8 tests
 **Config file discovery and upward search**
@@ -116,6 +117,11 @@ Quick lookup guide showing which tests cover which features. Total: **234 tests*
 - `TestRtllintWithConfigFile` (3): Reads config, CLI override, all options processed
 - `TestConfigSearchUpward` (3): Deep subdirectory search, prefer nearest, stop at first
 - `TestConfigErrorHandling` (3): Malformed YAML errors, invalid types, missing --config errors
+
+### `test_functions_config.py` — 5 tests (NEW)
+**Custom functions configuration integration**
+- `TestFunctionsConfigInTemplate` (1): Template includes commented functions_config option
+- `TestFunctionsConfigLoading` (4): Config file supports functions_config, passed to parser, optional behavior, custom functions merged with packaged
 
 ---
 
@@ -164,7 +170,8 @@ Quick lookup guide showing which tests cover which features. Total: **234 tests*
 | **--init-workflow config generation** | `config/test_init_workflow_config.py` | `TestInitWorkflowGeneratesConfig`, `TestInitWorkflowConfigContent`, `TestInitWorkflowErrorHandling` |
 | **Config integration** | `config/test_config_integration.py` | `TestRtldocWithConfigFile`, `TestRtllintWithConfigFile`, `TestConfigSearchUpward`, `TestConfigErrorHandling` |
 | **Built-in functions** | `core/test_builtin_functions.py` | `TestFunctionEvaluation`, `TestFunctionMarkdownOutput`, `TestFunctionEdgeCases` |
-| **Built-in function config** | `core/test_builtin_functions.py` | `TestFunctionsConfigLoading`, `TestMalformedConfigFallback` |
+| **Built-in function config** | `core/test_builtin_functions.py`, `config/test_functions_config.py` | `TestFunctionsConfigLoading`, `TestMalformedConfigFallback`, `TestFunctionsConfigInTemplate`, `TestFunctionsConfigLoading` |
+| **Custom functions in config** | `config/test_functions_config.py` | `TestFunctionsConfigLoading` |
 | **Nested function evaluation** | `core/test_builtin_functions.py` | `TestNestedFunctionCalls` |
 | **Function error handling** | `core/test_builtin_functions.py` | `TestFunctionErrorHandling`, `TestFunctionEdgeCases` |
 
@@ -172,8 +179,14 @@ Quick lookup guide showing which tests cover which features. Total: **234 tests*
 
 ## Notes
 
-- **Entry shims:** `tests/test_core.py` and `tests/test_lint.py` are import shims that consolidate all real tests for unified discovery via `python -m unittest`.
-- **Fixtures:** Test data stored in `tests/core/fixtures/` and `tests/lint/fixtures/`, copied before mutation (non-destructive).
-- **Run all:** `python -m unittest discover -s tests -p 'test_*.py'` (235 tests)
+- **Entry shims:** `tests/test_core.py`, `tests/test_lint.py`, and `tests/test_config.py` are import shims that consolidate all real tests for unified discovery via `python -m unittest`.
+- **Fixtures:** Test data stored in `tests/core/fixtures/`, `tests/lint/fixtures/`, and `tests/config/fixtures/`, copied before mutation (non-destructive).
+- **Run all:** `python -m unittest discover -s tests -p 'test_*.py'` (239 tests; avoid root `discover` as it duplicates via import shims)
+- **Run by feature:** 
+  - `python -m unittest discover -s tests/core -p 'test_*.py'` (116 tests)
+  - `python -m unittest discover -s tests/lint -p 'test_*.py'` (43 tests)
+  - `python -m unittest discover -s tests/config -p 'test_*.py'` (70 tests, includes 5 new functions_config)
+  - `python -m unittest discover -s tests/integration -p 'test_*.py'` (10 tests)
 - **Skip integration tests:** Add `@unittest.skipUnless` for features requiring external tools (e.g., verilator).
 - **Regression suite:** `tests/core/test_gaps.py` documents known parsing edge cases and v0.2.2/v0.2.3 fixes.
+- **New (v0.3.0):** Functions config integration tests in `tests/config/test_functions_config.py`; custom functions.yaml files via config option.

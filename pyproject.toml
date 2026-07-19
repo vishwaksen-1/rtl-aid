@@ -32,3 +32,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 rtl_aid = ["templates/**", "config/**"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
