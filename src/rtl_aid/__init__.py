@@ -1,4 +1,4 @@
 from .core import VerilogWikiParser
 
-__version__ = "0.2.8a1"
+__version__ = "1.0.0"
 __all__ = ["VerilogWikiParser"]

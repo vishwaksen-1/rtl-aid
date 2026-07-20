@@ -16,11 +16,11 @@
 
 ## Tier 2: Medium Complexity (2-4 hours each)
 
-- [ ] Make it runnable via a config file
+- [X] Make it runnable via a config file
 	Support YAML/TOML config files for rtldoc/rtllint instead of only CLI flags.
 	**Status:** Requires argparse refactoring.
 
-- [ ] `$clog2(...)` and other SystemVerilog built-in functions
+- [X] `$clog2(...)` and other SystemVerilog built-in functions
 	Add support for common SystemVerilog functions in rtldoc parsing.
 	**Ref:** [examples/issues/ble_controller.md](examples/issues/ble_controller.md)
 	**Status:** Regex-based parser improvement; scope depends on function set.
